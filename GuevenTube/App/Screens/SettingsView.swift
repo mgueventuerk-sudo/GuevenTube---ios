@@ -3,6 +3,11 @@ import GuevenCore
 
 struct SettingsView: View {
     @StateObject private var model = SettingsModel()
+    @EnvironmentObject private var kids: KidsModel
+    @State private var kidsUnlocked = false
+    @State private var pinInput = ""
+    @State private var newPin = ""
+    @State private var kidsMessage: String?
 
     var body: some View {
         Form {
@@ -27,10 +32,50 @@ struct SettingsView: View {
                     }
                 }
             }
+            kidsSection
             Section("Titel") { Toggle("DeArrow (bessere Titel und Vorschaubilder)", isOn: binding(\.deArrowEnabled)) }
         }
         .navigationTitle("Einstellungen")
         .task { await model.load() }
+    }
+
+    /// Änderungen am Kindermodus sind PIN-geschützt, sobald der Modus an ist und eine PIN existiert.
+    private var kidsLocked: Bool { model.settings.kidsMode && kids.hasPin && !kidsUnlocked }
+
+    @ViewBuilder private var kidsSection: some View {
+        Section {
+            if kidsLocked {
+                SecureField("PIN zum Ändern", text: $pinInput).keyboardType(.numberPad)
+                Button("Entsperren") {
+                    Task {
+                        kidsMessage = await kids.verify(pin: pinInput); pinInput = ""
+                        kidsUnlocked = kidsMessage == nil
+                    }
+                }.disabled(pinInput.count < 4)
+            } else {
+                if !kids.hasPin {
+                    SecureField("Neue PIN (4–8 Ziffern)", text: $newPin).keyboardType(.numberPad)
+                    Button("PIN setzen") { Task { kidsMessage = await kids.setPin(newPin); newPin = "" } }.disabled(newPin.count < 4)
+                }
+                // Ohne PIN lässt sich der Modus nicht einschalten – sonst könnte ihn jeder sofort wieder ausschalten.
+                Toggle("Kindermodus", isOn: binding(\.kidsMode)).disabled(!kids.hasPin && !model.settings.kidsMode)
+                if model.settings.kidsMode {
+                    Picker("Tageslimit", selection: binding(\.kidsDailyLimitMinutes)) {
+                        Text("Aus").tag(0)
+                        ForEach([30, 60, 90, 120, 180], id: \.self) { Text("\($0) Min.").tag($0) }
+                    }
+                    Picker("Schlafenszeit ab", selection: binding(\.kidsBedtimeHour)) {
+                        Text("Aus").tag(0)
+                        ForEach(18...23, id: \.self) { Text("\($0) Uhr").tag($0) }
+                    }
+                    Text("Heute genutzt: \(kids.usedMinutes) Min.").font(.footnote).foregroundStyle(.secondary)
+                }
+                if kids.hasPin && !model.settings.kidsMode {
+                    Button("PIN entfernen", role: .destructive) { Task { await kids.removePin() } }
+                }
+            }
+            if let kidsMessage { Text(kidsMessage).foregroundStyle(.red).font(.footnote) }
+        } header: { Text("Kindermodus") }
     }
 
     private func binding<T: Sendable>(_ path: WritableKeyPath<AppSettings, T>) -> Binding<T> {

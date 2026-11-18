@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @StateObject private var app: AppModel
     @StateObject private var music: MusicModel
+    @StateObject private var kids = KidsModel()
 
     init() {
         let a = AppModel()
@@ -20,7 +21,11 @@ struct RootView: View {
         }
         .environmentObject(app)
         .environmentObject(music)
-        .fullScreenCover(isPresented: $app.showPlayer) { PlayerScreen(player: app.player).environmentObject(app) }
+        .environmentObject(kids)
+        .overlay { if let b = kids.block, !app.showPlayer { KidsBlockView(reason: b.reason).environmentObject(kids) } }
+        .task { kids.start(player: app.player); await kids.refreshPin() }
+        .fullScreenCover(isPresented: $app.showPlayer) { PlayerScreen(player: app.player).environmentObject(app)
+                .overlay { if let b = kids.block { KidsBlockView(reason: b.reason).environmentObject(kids) } } }
     }
 }
 

@@ -22,6 +22,8 @@ final class AppEnvironment: @unchecked Sendable {
     let downloadManager: DownloadManager
     let downloads: DownloadRepository
     let sponsorBlock: SponsorBlockClient
+    let profileLock: ProfileLock
+    let kidsGuard: KidsTimeGuard
 
     static let shared = AppEnvironment()
 
@@ -71,6 +73,9 @@ final class AppEnvironment: @unchecked Sendable {
         self.downloadStore = downloadStore; self.downloadManager = downloadManager; self.downloads = downloads
         let library = LocalLibrary(file: dir(support, "library").appendingPathComponent("library.json"))
         self.library = library
+        let profileLock = ProfileLock(store: BackendProfileLockStore(backend: keychain, plain: values))
+        self.profileLock = profileLock
+        self.kidsGuard = KidsTimeGuard(usage: DefaultsKidsUsageStore(), profileLock: profileLock)
         self.settings = settings; self.sponsorBlock = sponsorBlock
         self.transport = transport; self.secrets = secrets; self.accounts = accounts; self.auth = auth; self.oauth = oauth
         self.config = config; self.innerTube = innerTube; self.playerScripts = scripts; self.solver = solver

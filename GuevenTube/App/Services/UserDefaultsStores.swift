@@ -19,3 +19,16 @@ final class DefaultsPreferredRouteStore: PreferredRouteStore, @unchecked Sendabl
         if let label { defaults.set(label, forKey: key) } else { defaults.removeObject(forKey: key) }
     }
 }
+
+/// Tagesnutzung des Kindermodus; Tag und Sekunden liegen zusammen in UserDefaults.
+final class DefaultsKidsUsageStore: KidsUsageStore, @unchecked Sendable {
+    private let defaults: UserDefaults
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+    func load() async -> (day: Int, seconds: Int64) {
+        (defaults.integer(forKey: "gt.kids.day"), Int64(defaults.integer(forKey: "gt.kids.seconds")))
+    }
+    func save(day: Int, seconds: Int64) async {
+        defaults.set(day, forKey: "gt.kids.day")
+        defaults.set(Int(seconds), forKey: "gt.kids.seconds")
+    }
+}
