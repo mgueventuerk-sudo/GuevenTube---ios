@@ -41,3 +41,9 @@ Jede Etappe: Tests gegen aufgezeichnete JSON-Antworten (aus Android-Testdaten ü
 
 ## Etappe 4a – Musik-Parser (fertig)
 `MusicModels.swift`, `MusicParser.swift` (inkl. `MusicCover.hiRes`) aus `MusicParser.kt`/`MusicModels.kt`; 11 Tests, darunter zwei mit eingefrorenen WEB_REMIX-Antworten (`remix_next`, `remix_related`). Offen in Etappe 4: Warteschlangenlogik aus `MusicPlayback.kt` (Radio-Nachfüllen, Wiederholen, Mischen), `MusicSessionStore`, SponsorBlock, DeArrow, `DownloadQualityResolver`.
+
+## Etappe 4b/4c – Wiedergabe-Warteschlange, Sitzung, SponsorBlock, Download-Qualität (fertig)
+- `MusicQueueState` (reine Zustandsmaschine statt `MusicPlayback`; Player und Netz liefern/erhalten `MusicQueueEffect`), `MusicSessionStore` (Dateiformat, 7-Tage-Grenze, atomares Schreiben; Entprellen macht die App-Schicht).
+- `SponsorBlockClient` (k-Anonymität über SHA-256-Präfix, eigene SHA-256-Implementierung gegen `sha256sum` geprüft, 30-min-Cache, Fallback auf veraltete Segmente, Höhepunkt). Abweichung von Android: Netzfehler werden bei `highlight` nicht als „kein Höhepunkt“ gemerkt.
+- `DownloadQualityResolver` (H.264/AAC-MP4 bevorzugt).
+- Offen in Etappe 4: DeArrow, Einstellungen/Feature-Flags, Persistenz (SwiftData), Abos, Kinder-Modus, Statistik.
