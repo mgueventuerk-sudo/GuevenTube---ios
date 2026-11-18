@@ -28,6 +28,9 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSAppTransportSecurity: {NSAllowsArbitraryLoads: false}
+        NSLocalNetworkUsageDescription: GuevenTube sucht Fernseher mit GuevenTube im WLAN, um sie als Fernbedienung zu steuern.
+        NSBonjourServices: [_gueventube._tcp]
+        NSCameraUsageDescription: Die Kamera liest den QR-Code zum Koppeln mit dem Fernseher.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.gueventube.app

@@ -25,6 +25,7 @@ final class AppEnvironment: @unchecked Sendable {
     let profileLock: ProfileLock
     let deArrow: DeArrowClient
     let kidsGuard: KidsTimeGuard
+    let link: LinkStore
 
     static let shared = AppEnvironment()
 
@@ -77,6 +78,7 @@ final class AppEnvironment: @unchecked Sendable {
         let profileLock = ProfileLock(store: BackendProfileLockStore(backend: keychain, plain: values))
         self.profileLock = profileLock
         self.deArrow = DeArrowClient(transport: transport)
+        self.link = LinkStore(secrets: secrets, deviceModel: "iPhone")
         self.kidsGuard = KidsTimeGuard(usage: DefaultsKidsUsageStore(), profileLock: profileLock)
         self.settings = settings; self.sponsorBlock = sponsorBlock
         self.transport = transport; self.secrets = secrets; self.accounts = accounts; self.auth = auth; self.oauth = oauth

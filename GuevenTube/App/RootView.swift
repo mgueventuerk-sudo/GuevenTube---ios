@@ -5,6 +5,8 @@ struct RootView: View {
     @StateObject private var app: AppModel
     @StateObject private var music: MusicModel
     @StateObject private var kids = KidsModel()
+    @ObservedObject private var link = LinkModel.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         let a = AppModel()
@@ -23,6 +25,9 @@ struct RootView: View {
         .environmentObject(app)
         .environmentObject(music)
         .environmentObject(kids)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { link.suspendForBackground() } else if phase == .active { link.resumeFromBackground() }
+        }
         .overlay { if let b = kids.block, !app.showPlayer { KidsBlockView(reason: b.reason).environmentObject(kids) } }
         .sheet(item: Binding(get: { app.showPlayer ? nil : app.channelRoute }, set: { app.channelRoute = $0 })) { c in
             NavigationStack { ChannelView(channel: c).toolbar { ToolbarItem(placement: .topBarLeading) { Button("Schließen") { app.channelRoute = nil } } } }

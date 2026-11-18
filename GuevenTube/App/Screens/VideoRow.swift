@@ -3,10 +3,15 @@ import GuevenCore
 
 struct VideoRow: View {
     @EnvironmentObject private var app: AppModel
+    @ObservedObject private var link = LinkModel.shared
     let item: VideoItem
     @State private var branding: Branding = .original
     var body: some View {
         row.contextMenu {
+            if link.isConnected {
+                Button("Auf Fernseher abspielen", systemImage: "tv") { link.play(item) }
+                Button("Beim Fernseher einreihen", systemImage: "text.badge.plus") { link.addToQueue(item) }
+            }
             if let id = item.channelId, let name = item.channelName {
                 Button("Kanal „\(name)“ öffnen") { app.channelRoute = ChannelRef(channelId: id, name: name) }
             }

@@ -10,6 +10,7 @@ struct AccountView: View {
                 Section {
                     NavigationLink("Einstellungen") { SettingsView() }
                     NavigationLink("Downloads") { DownloadsView() }
+                    NavigationLink("Fernseher (Fernbedienung)") { RemoteView() }
                 }
                 Section("Anmeldung") { signInSection }
                 Section("Konten") {
