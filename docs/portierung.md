@@ -21,7 +21,7 @@ Quelle: Android-App `wavetv` (Gitea `muester1991/GuevenTube`, 2.5.1). Ziel: glei
 
 ## Etappen
 1. Gerüst + CI (dieser Stand).
-2. InnerTube-Client (Parser/Modelle), Feed, Suche.
+2. InnerTube-Parser und Modelle (Feed, Suche, Watch-Next, Kapitel, Player, Konto) – **fertig**, 20 Tests grün auf Linux, u. a. mit den aufgezeichneten Such-Antworten der Android-App. Noch offen: Netzwerk-Client (Anfragen, Config, Clients) und Feed-/Suche-Oberfläche.
 3. StreamResolver (Client-Routen, Entschlüsselung via JavaScriptCore), Video-Player.
 4. Musik: Warteschlange, Hintergrund, Sperrbildschirm-Steuerung.
 5. Konto/Anmeldung, Mediathek, Verlauf, SponsorBlock.
