@@ -56,5 +56,8 @@ Jede Etappe: Tests gegen aufgezeichnete JSON-Antworten (aus Android-Testdaten ü
 
 ## Stand: GuevenCore (161+8 Tests, alle unter Linux grün)
 Fertig: JSON, Parser (Feed/Suche/Player/Watch-Next/Musik), InnerTube-Client, Player-Clients und -Routen, StreamResolver, SponsorBlock, DeArrow, Musik-Warteschlange und -Sitzung, Download-Qualität, Transkript/Kurzfassung, Abo-Reihenfolge, Statistik, Feature-Flags.
-**Noch nicht portiert (Linux-testbar):** Einstellungen (`AppSettings`), Remote-Config-Paket, Verlauf/„Später ansehen“/Playlists-Modelle (Room → SwiftData), Kinder-Modus-Regeln, `link/` (Kopplung, gemeinsames Schauen), Auth (OAuth-Gerätecode).
+**Noch nicht portiert (Linux-testbar):** Einstellungen (`AppSettings`), Remote-Config-Paket, Verlauf/„Später ansehen“/Playlists-Modelle (Room → SwiftData), Kinder-Modus-Regeln, `link/` (Kopplung, gemeinsames Schauen).
 **Nur auf dem Mac baubar (nicht angefasst):** SwiftUI-Oberfläche, AVPlayer-Anbindung (inkl. Bild+Ton-Zusammenführung), JavaScriptCore-Entschlüsselung (`ChallengeSolving`), Keychain (`SecretStoring`), Sperrbildschirm/Now-Playing, Hintergrund-Downloads, Biometrie.
+
+## Etappe 5 – Anmeldung (fertig, 194 Tests)
+`Auth.swift`: `AccountCredentials` (Tokens in Logs geschwärzt, alte Dateien lesbar), `OAuthClient` (Gerätecode, Polling, Erneuerung, Widerruf; Client-Kennung live aus dem TV-Skript mit Rückfall), `AuthTokenManager` (eine gemeinsame Erneuerung für parallele Aufrufer, „neu anmelden“ bei `invalid_grant`, alter Token bei Netzfehler solange gültig). Das Speichern der Konten (`AccountCredentialStore`) übernimmt auf dem iPhone die Keychain. Android-spezifisch entfällt der APK-Signaturcheck.
