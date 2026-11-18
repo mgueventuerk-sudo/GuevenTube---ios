@@ -39,6 +39,7 @@ struct PlayerScreen: View {
                     Text(v.title).font(.headline)
                     Text(v.channelName ?? "").font(.subheadline).foregroundStyle(.secondary)
                     Button("Später ansehen") { Task { await AppEnvironment.shared.library.addToWatchLater(v) } }
+                    AddToPlaylistMenu(video: v)
                     Menu("Herunterladen") {
                         ForEach([DownloadQuality.audioOnly, .hd, .fullHd], id: \.self) { q in
                             Button(q.label) { downloads.enqueue(v, quality: q) }

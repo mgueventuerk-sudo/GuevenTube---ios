@@ -11,6 +11,7 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section { NavigationLink("Meine Playlists") { PlaylistsView() } }
                 if signedIn {
                     Section("YouTube-Konto") {
                         NavigationLink("Verlauf") { HistoryView() }

@@ -126,3 +126,6 @@ Einstellungen (`SettingsView` über `SettingsStore`: Auflösungslimit, Autoplay,
 ## Etappe 22 – Verlauf und Abos (App-Schicht, nur Syntaxprüfung)
 Mediathek zeigt bei angemeldetem Konto „Verlauf“ (`FEhistory`, `parseFeed`, Nachladen per Continuation, Duplikate entfernt) und „Abos“ (`FEsubscriptions`, `parseSubscriptionChannels`, Punkt bei neuen Inhalten). **Nicht geprüft [sicher]:** ob der TV-Client (wie bei der Startseite) für `FEhistory` ein von `parseFeed` lesbares Format liefert; Antworten nie gegen das echte YouTube gesehen.
 **Offen:** Kanalseiten (Abos sind nur eine Liste), eigene Playlists (`FElibrary` / Playlist-Detail), Gemeinsam schauen, Benachrichtigungen, DeArrow in Listen, Album-/Interpretenseiten, Kommentare/Transkripte.
+
+## Etappe 23 – Eigene Playlists (App-Schicht, nur Syntaxprüfung)
+`PlaylistsView` (anlegen, umbenennen mit Doppelnamen-Prüfung, löschen), `PlaylistDetailView` (abspielen, entfernen), Menü „Zu Playlist“ im Player; alles über das getestete `LocalLibrary` (rein lokal, „Später ansehen“ ausgeblendet und als Name reserviert). **Grenzen [sicher]:** Playlists liegen nur auf dem Gerät (kein Abgleich mit YouTube-Playlists des Kontos, kein Export); keine Wiedergabe der ganzen Liste am Stück (jedes Video einzeln).
