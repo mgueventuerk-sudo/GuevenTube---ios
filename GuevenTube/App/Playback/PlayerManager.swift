@@ -56,11 +56,39 @@ final class PlayerManager: ObservableObject {
     func play(_ plan: PlaybackPlan, startAtMs: Int64 = 0, info: NowPlaying? = nil) {
         // Ohne aktive Sitzung bricht die Wiedergabe im Hintergrund und bei gesperrtem Bildschirm ab.
         try? AVAudioSession.sharedInstance().setActive(true)
-        start(plan, startAtMs: startAtMs, info: info)
+        alternative = nil
+        hlsMaxHeight = nil
+        var first = plan
+        if let hls = plan.hlsFallbackUrl, !plan.isLive {
+            var viaHls = plan
+            viaHls.source = .hls(url: hls); viaHls.hlsFallbackUrl = nil; viaHls.qualityLabel = "HLS"
+            var original = plan
+            original.hlsFallbackUrl = nil
+            switch plan.source {
+            case .separate(_, _, let height):
+                // Zwei getrennte Ströme zu einem Medium zusammensetzen hängt auf dem iPhone mit YouTube-DASH-URLs (Ladekreis ohne Ende).
+                // HLS spielt AVPlayer nativ: zuerst HLS (mit Höhenbegrenzung), die Zusammensetzung nur als Notweg.
+                first = viaHls; alternative = original; hlsMaxHeight = height
+            case .progressive:
+                alternative = viaHls
+            case .hls, .audioOnly:
+                break
+            }
+        }
+        start(first, startAtMs: startAtMs, info: info)
     }
+
+    /// Zweiter Weg, falls der erste fehlschlägt oder nicht rechtzeitig startet.
+    private var alternative: PlaybackPlan?
+    private var hlsMaxHeight: Int?
+    private var watchdog: Task<Void, Never>?
+    private var startGeneration = 0
 
     private func start(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?) {
         loadTask?.cancel()
+        watchdog?.cancel()
+        startGeneration += 1
+        let generation = startGeneration
         self.plan = plan
         self.info = info
         state = .loading
@@ -72,18 +100,24 @@ final class PlayerManager: ObservableObject {
                 self.attach(item, startAtMs: startAtMs)
             } catch is CancellationError {
             } catch {
-                self?.fallbackOrFail(plan, startAtMs: startAtMs, info: info, error: error)
+                self?.fallbackOrFail(startAtMs: startAtMs, info: info, error: error)
             }
+        }
+        // Ein Weg, der nie fertig wird, darf nicht ewig den Ladekreis zeigen.
+        let limitSeconds: UInt64 = alternative != nil ? 12 : 45
+        watchdog = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: limitSeconds * 1_000_000_000)
+            guard !Task.isCancelled, let self, self.startGeneration == generation, self.state == .loading else { return }
+            self.fallbackOrFail(startAtMs: startAtMs, info: info,
+                                error: NSError(domain: "GuevenTube", code: 1, userInfo: [NSLocalizedDescriptionKey: "Zeitüberschreitung: Das Video startet nicht."]))
         }
     }
 
-    /// Notweg HLS, falls vorhanden; sonst Fehler mit der echten Ursache anzeigen.
-    private func fallbackOrFail(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?, error: Error?) {
-        if let hls = plan.hlsFallbackUrl {
-            var next = plan
-            next.source = .hls(url: hls)
-            next.hlsFallbackUrl = nil
-            next.qualityLabel = "HLS"
+    /// Notweg, falls vorhanden; sonst Fehler mit der echten Ursache anzeigen.
+    private func fallbackOrFail(startAtMs: Int64, info: NowPlaying?, error: Error?) {
+        if let next = alternative {
+            alternative = nil
+            hlsMaxHeight = nil
             start(next, startAtMs: startAtMs, info: info)
             return
         }
@@ -110,7 +144,7 @@ final class PlayerManager: ObservableObject {
     func setRate(_ rate: Float) { player.defaultRate = rate; if state == .playing { player.rate = rate } }
 
     func stop() {
-        loadTask?.cancel()
+        loadTask?.cancel(); watchdog?.cancel(); alternative = nil; hlsMaxHeight = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
         itemObservers.removeAll()
@@ -161,6 +195,7 @@ final class PlayerManager: ObservableObject {
 
     private func attach(_ item: AVPlayerItem, startAtMs: Int64) {
         itemObservers.removeAll()
+        if let h = hlsMaxHeight { item.preferredMaximumResolution = CGSize(width: Double(h) * 16 / 9, height: Double(h)) }
         item.publisher(for: \.status).receive(on: DispatchQueue.main).sink { [weak self] status in
             guard let self else { return }
             switch status {
@@ -173,8 +208,7 @@ final class PlayerManager: ObservableObject {
                 self.state = .playing
                 self.publishNowPlaying()
             case .failed:
-                if let plan = self.plan { self.fallbackOrFail(plan, startAtMs: startAtMs, info: self.info, error: item.error) }
-                else { self.state = .failed(item.error?.localizedDescription ?? "Wiedergabe fehlgeschlagen") }
+                self.fallbackOrFail(startAtMs: startAtMs, info: self.info, error: item.error)
             default: break
             }
         }.store(in: &itemObservers)

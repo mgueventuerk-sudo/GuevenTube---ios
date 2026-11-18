@@ -73,6 +73,36 @@ final class DeviceAuthFlowTests: XCTestCase {
         XCTAssertEqual(qr, "https://www.google.com/device?user_code=ABC-DEF")
     }
 
+    func testPendingCodeIsPublishedAndClearedAndCanBeResumed() async {
+        // 1) Ein neuer Code wird zum Speichern gemeldet und nach Abschluss wieder gelöscht.
+        final class Pending: @unchecked Sendable { let lock = NSLock(); var values: [PendingDeviceAuth?] = []; func add(_ p: PendingDeviceAuth?) { lock.withLock { values.append(p) } } }
+        let pending = Pending()
+        let first = await flow(FakeOAuth(polls: [.success(tokens)]), profiles: FakeProfiles(info: info), store: FakeAccounts())
+            .run(resume: nil, onPending: pending.add, report: { _ in })
+        guard case .success = first else { return XCTFail("\(first)") }
+        XCTAssertEqual(pending.values.count, 2)
+        XCTAssertEqual(pending.values[0]?.deviceCode, "dev"); XCTAssertEqual(pending.values[0]?.clientId, "cid")
+        XCTAssertNil(pending.values[1], "nach Erfolg gelöscht")
+
+        // 2) Nach einem App-Neustart wird der gespeicherte Code fortgesetzt, ohne einen neuen anzufordern (hier würde das scheitern).
+        let saved = PendingDeviceAuth(deviceCode: "dev", userCode: "ABC-DEF", verificationUrl: "https://www.google.com/device",
+                                      expiresAtMs: 600_000, intervalSeconds: 5, clientId: "cid", clientSecret: "sec")
+        let oauth = FakeOAuth(polls: [.pending, .success(tokens)], codeError: OAuthError(error: "e", message: "darf nicht aufgerufen werden"))
+        let log = Log()
+        let resumed = await flow(oauth, profiles: FakeProfiles(info: info), store: FakeAccounts())
+            .run(resume: saved, onPending: { _ in }, report: log.add)
+        guard case .success = resumed else { return XCTFail("\(resumed)") }
+        guard case .awaitingUser(let code, _, _, _) = log.states[1] else { return XCTFail() }
+        XCTAssertEqual(code, "ABC-DEF")
+
+        // 3) Ein abgelaufener gespeicherter Code wird verworfen und ein neuer angefordert.
+        let expired = PendingDeviceAuth(deviceCode: "alt", userCode: "OLD", verificationUrl: "https://www.google.com/device",
+                                        expiresAtMs: 10, intervalSeconds: 5, clientId: "cid", clientSecret: "sec")
+        let fresh = await flow(FakeOAuth(polls: [.success(tokens)]), profiles: FakeProfiles(info: info), store: FakeAccounts())
+            .run(resume: expired, onPending: { _ in }, report: { _ in })
+        guard case .success = fresh else { return XCTFail("\(fresh)") }
+    }
+
     func testSameChannelReplacesExistingAccount() async throws {
         let store = FakeAccounts()
         let old = try AccountCredentials(accountId: "alt", displayName: "Alt", channelId: "UC123", accessToken: "o", accessTokenExpiresAtEpochMs: 0,

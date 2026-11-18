@@ -9,6 +9,21 @@ public enum DeviceAuthState: Equatable, Sendable {
     case failed(String)
 }
 
+/// Ein ausgestellter, noch nicht bestätigter Gerätecode; wird gespeichert, damit die Anmeldung einen App-Neustart übersteht.
+public struct PendingDeviceAuth: Codable, Equatable, Sendable {
+    public var deviceCode: String
+    public var userCode: String
+    public var verificationUrl: String
+    public var expiresAtMs: Int64
+    public var intervalSeconds: Int64
+    public var clientId: String
+    public var clientSecret: String
+    public init(deviceCode: String, userCode: String, verificationUrl: String, expiresAtMs: Int64, intervalSeconds: Int64, clientId: String, clientSecret: String) {
+        self.deviceCode = deviceCode; self.userCode = userCode; self.verificationUrl = verificationUrl
+        self.expiresAtMs = expiresAtMs; self.intervalSeconds = intervalSeconds; self.clientId = clientId; self.clientSecret = clientSecret
+    }
+}
+
 public protocol DeviceAuthOAuth: Sendable {
     func clientCredentials() async throws -> OAuthClientCredentials
     func requestDeviceCode(client: OAuthClientCredentials?) async throws -> DeviceCodeResponse
@@ -57,22 +72,45 @@ public struct DeviceAuthFlow: Sendable {
     /// Führt die Anmeldung aus und meldet jeden Zustand. Abbruch = Task abbrechen; dann wird nichts gespeichert (Rückgabe `.idle`).
     @discardableResult
     public func run(_ report: @Sendable (DeviceAuthState) -> Void) async -> DeviceAuthState {
-        func finish(_ s: DeviceAuthState) -> DeviceAuthState { report(s); return s }
+        await run(resume: nil, onPending: { _ in }, report: report)
+    }
+
+    /// Wie `run`, kann aber einen noch gültigen Code fortsetzen (`resume`) und meldet jeden neuen Code über `onPending`
+    /// (`nil` = Anmeldung beendet). So überlebt die Anmeldung, dass iOS die App im Hintergrund beendet, während der
+    /// Nutzer den Code im Browser bestätigt.
+    @discardableResult
+    public func run(resume: PendingDeviceAuth?, onPending: @Sendable (PendingDeviceAuth?) -> Void,
+                    report: @Sendable (DeviceAuthState) -> Void) async -> DeviceAuthState {
+        func finish(_ s: DeviceAuthState) -> DeviceAuthState { onPending(nil); report(s); return s }
         report(.requestingCode)
         let client: OAuthClientCredentials, code: DeviceCodeResponse
-        do {
-            client = try await oauth.clientCredentials()
-            code = try await oauth.requestDeviceCode(client: client)
-        } catch is CancellationError { return finish(.idle) }
-        catch { return finish(.failed("Anmeldecode konnte nicht angefordert werden: \((error as? OAuthError)?.message ?? error.localizedDescription)")) }
-
-        let expiresAt = nowMs() + code.expiresInSeconds * 1000
+        let expiresAt: Int64
+        if let resume, resume.expiresAtMs > nowMs() {
+            client = OAuthClientCredentials(clientId: resume.clientId, clientSecret: resume.clientSecret)
+            code = DeviceCodeResponse(deviceCode: resume.deviceCode, userCode: resume.userCode, verificationUrl: resume.verificationUrl,
+                                      expiresInSeconds: max((resume.expiresAtMs - nowMs()) / 1000, 1), intervalSeconds: resume.intervalSeconds)
+            expiresAt = resume.expiresAtMs
+        } else {
+            do {
+                client = try await oauth.clientCredentials()
+                code = try await oauth.requestDeviceCode(client: client)
+            } catch is CancellationError { return finish(.idle) }
+            catch { return finish(.failed("Anmeldecode konnte nicht angefordert werden: \((error as? OAuthError)?.message ?? error.localizedDescription)")) }
+            expiresAt = nowMs() + code.expiresInSeconds * 1000
+            onPending(PendingDeviceAuth(deviceCode: code.deviceCode, userCode: code.userCode, verificationUrl: code.verificationUrl,
+                                        expiresAtMs: expiresAt, intervalSeconds: code.intervalSeconds,
+                                        clientId: client.clientId, clientSecret: client.clientSecret))
+        }
         report(.awaitingUser(userCode: code.userCode, verificationUrl: code.verificationUrl,
                              qrContent: Self.qrContent(code.verificationUrl, userCode: code.userCode), expiresAtMs: expiresAt))
         var intervalMs = max(code.intervalSeconds, Self.minIntervalSeconds) * 1000
         var consecutiveFailures = 0
+        // Fortgesetzter Code: Der Nutzer hat meist schon bestätigt, also sofort abfragen statt erst zu warten.
+        var skipSleep = resume != nil && resume!.expiresAtMs > nowMs()
         while nowMs() < expiresAt {
-            do { try await sleepMs(intervalMs) } catch { return finish(.idle) }
+            if skipSleep { skipSleep = false } else {
+                do { try await sleepMs(intervalMs) } catch { return finish(.idle) }
+            }
             let result: TokenPollResult
             do { result = try await oauth.pollToken(deviceCode: code.deviceCode, client: client) } catch { return finish(.idle) }
             switch result {
@@ -89,14 +127,15 @@ public struct DeviceAuthFlow: Sendable {
             case .slowDown: consecutiveFailures = 0; intervalMs += Self.slowDownStepMs
             case .expired: return finish(.failed("Der Code ist abgelaufen. Bitte neu starten."))
             case .denied: return finish(.failed("Die Anmeldung wurde abgelehnt."))
-            case .success(let tokens): return await complete(tokens, client: client, report: report)
+            case .success(let tokens): return await complete(tokens, client: client, onPending: onPending, report: report)
             }
         }
         return finish(.failed("Der Code ist abgelaufen. Bitte neu starten."))
     }
 
-    private func complete(_ tokens: TokenResponse, client: OAuthClientCredentials, report: @Sendable (DeviceAuthState) -> Void) async -> DeviceAuthState {
-        func finish(_ s: DeviceAuthState) -> DeviceAuthState { report(s); return s }
+    private func complete(_ tokens: TokenResponse, client: OAuthClientCredentials, onPending: @Sendable (PendingDeviceAuth?) -> Void,
+                          report: @Sendable (DeviceAuthState) -> Void) async -> DeviceAuthState {
+        func finish(_ s: DeviceAuthState) -> DeviceAuthState { onPending(nil); report(s); return s }
         report(.completing)
         guard let refresh = tokens.refreshToken, !refresh.trimmingCharacters(in: .whitespaces).isEmpty else {
             return finish(.failed("Google hat keinen Refresh-Token geliefert."))

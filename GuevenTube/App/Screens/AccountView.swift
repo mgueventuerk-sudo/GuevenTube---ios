@@ -41,7 +41,8 @@ struct AccountView: View {
                 }
             }
             .navigationTitle("Konto")
-            .task { await model.refresh() }
+            .task { await model.refresh(); model.resumeIfPending() }
+            .onChange(of: scenePhase) { _, p in if p == .active { model.resumeIfPending() } }
         }
     }
 
