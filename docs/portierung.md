@@ -38,3 +38,6 @@ Jede Etappe: Tests gegen aufgezeichnete JSON-Antworten (aus Android-Testdaten ü
 - Austauschbare Schnittstellen für Dinge, die erst auf dem Mac laufen: `ChallengeSolving` (n-/Signatur-Entschlüsselung, später JavaScriptCore + yt-dlp-EJS-Solver), `PlayerScriptProviding` (Player-Skript, signatureTimestamp), `PoTokenProviding`, `PlayerEndpoint`.
 - Nicht portiert (Labor/Android-spezifisch): SABR, NewPipe-Rückfall, signiertes Konfigurationspaket.
 - Beim Portieren aufgefallen: In der Android-Version geht die Fehlerart `TECHNICAL` bei einer Gesamt-Zeitüberschreitung verloren (der `catch` in `resolveRoutes` ersetzt die Menge). In Swift behoben.
+
+## Etappe 4a – Musik-Parser (fertig)
+`MusicModels.swift`, `MusicParser.swift` (inkl. `MusicCover.hiRes`) aus `MusicParser.kt`/`MusicModels.kt`; 11 Tests, darunter zwei mit eingefrorenen WEB_REMIX-Antworten (`remix_next`, `remix_related`). Offen in Etappe 4: Warteschlangenlogik aus `MusicPlayback.kt` (Radio-Nachfüllen, Wiederholen, Mischen), `MusicSessionStore`, SponsorBlock, DeArrow, `DownloadQualityResolver`.
