@@ -80,24 +80,8 @@ public struct SignedConfigVerifier: Sendable {
 
     private struct Dto: Decodable {
         var schema: Int; var version: Int64; var issuedAt: String?
-        var clients: [ProfileDto]?; var solver: SolverRef?; var flags: [String: Bool]?
+        var clients: [PlayerClientProfileDto]?; var solver: SolverRef?; var flags: [String: Bool]?
     }
-    private struct ProfileDto: Decodable {
-        var id: String, label: String, clientName: String, clientNameId: Int, clientVersion: String, userAgent: String
-        var referer: String?, deviceMake: String?, deviceModel: String?, osName: String?, osVersion: String?
-        var platform: String?, clientScreen: String?, embedUrl: String?
-        var supportsOAuth: Bool?, requiresPoToken: Bool?, requiresJsPlayer: Bool?, enabled: Bool?
-        var profile: PlayerClientProfile {
-            var p = PlayerClientProfile(id: id, label: label, clientName: clientName, clientNameId: clientNameId, clientVersion: clientVersion, userAgent: userAgent)
-            if let referer { p.referer = referer }
-            p.deviceMake = deviceMake; p.deviceModel = deviceModel; p.osName = osName; p.osVersion = osVersion
-            p.platform = platform; p.clientScreen = clientScreen; p.embedUrl = embedUrl
-            p.supportsOAuth = supportsOAuth ?? false; p.requiresPoToken = requiresPoToken ?? false
-            p.requiresJsPlayer = requiresJsPlayer ?? true; p.enabled = enabled ?? true
-            return p
-        }
-    }
-
     static func decode(_ bytes: Data) throws -> SignedConfig {
         guard let d = try? JSONDecoder().decode(Dto.self, from: bytes) else { throw SignedConfigError("Paket nicht lesbar") }
         return SignedConfig(schema: d.schema, version: d.version, issuedAt: d.issuedAt, clients: d.clients?.map(\.profile), solver: d.solver, flags: d.flags ?? [:])
@@ -194,5 +178,21 @@ public actor SignedConfigRepository {
             let compact = String(signature.unicodeScalars.filter { !CharacterSet.whitespacesAndNewlines.contains($0) })
             try (Data(compact.utf8) + Data([0x0A]) + bytes).write(to: bundleFile, options: .atomic)
         } catch { /* nicht speicherbar: bleibt im Speicher */ }
+    }
+}
+
+struct PlayerClientProfileDto: Decodable {
+    var id: String, label: String, clientName: String, clientNameId: Int, clientVersion: String, userAgent: String
+    var referer: String?, deviceMake: String?, deviceModel: String?, osName: String?, osVersion: String?
+    var platform: String?, clientScreen: String?, embedUrl: String?
+    var supportsOAuth: Bool?, requiresPoToken: Bool?, requiresJsPlayer: Bool?, enabled: Bool?
+    var profile: PlayerClientProfile {
+        var p = PlayerClientProfile(id: id, label: label, clientName: clientName, clientNameId: clientNameId, clientVersion: clientVersion, userAgent: userAgent)
+        if let referer { p.referer = referer }
+        p.deviceMake = deviceMake; p.deviceModel = deviceModel; p.osName = osName; p.osVersion = osVersion
+        p.platform = platform; p.clientScreen = clientScreen; p.embedUrl = embedUrl
+        p.supportsOAuth = supportsOAuth ?? false; p.requiresPoToken = requiresPoToken ?? false
+        p.requiresJsPlayer = requiresJsPlayer ?? true; p.enabled = enabled ?? true
+        return p
     }
 }

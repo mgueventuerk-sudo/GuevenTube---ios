@@ -89,3 +89,6 @@ Noch offen im `link/`-Bereich: „Gemeinsam schauen“ (Watch-Together) und Netz
 ## Etappe 13 – Gemeinsam schauen, Selbsttest, Sofortstart (fertig, 305 Tests)
 `WatchTogether.plan` (Position mit 600 ms Vorlauf, Toleranz 2 s, Live öffnet nur, beim Puffern des TV nichts tun), `PlaybackSelfTest` (täglich, 1-KB-Probe mit Range und passendem User-Agent, Frühwarnung bei Bot-Prüfung/SABR, läuft nie doppelt, Ergebnis dauerhaft), `PlaybackPrefetcher` (wahrscheinlich vor spekulativ, 1 bzw. 2 Plätze mit Verdrängung, 10-min-Wiederholsperre, nur WLAN für spekulative, 20-s-Zeitlimit). Medien vorladen (`MediaPreloader`) bleibt App-Schicht (`afterResolved`-Haken).
 **Damit ist die Linux-testbare Logik vollständig portiert.** Offen sind nur noch App-Schicht und Mac-Build.
+
+## Etappe 14 – Player-Skript und Profil-Register (fertig, 320 Tests)
+`PlayerScriptRepository` (der bisher fehlende Produktivteil von `PlayerScriptProviding`: Player-ID aus `iframe_api` mit 1-h-Cache, `base.js` im Speicher und auf der Platte, nur die zwei neuesten Versionen, ID-Format geprüft gegen Pfadtricks, `signatureTimestamp`, parallele Aufrufe laden einmal) und `PlayerClientRegistry` (der Produktivteil von `ClientProfileProviding`: eigene URL vor signiertem Paket vor eingebauten Profilen, zuletzt gültige Datei als Rückfall, ungültige Dateien werden nie gespeichert).
