@@ -476,7 +476,9 @@ public actor StreamResolver {
             return nil
         }
         if let nValue = URLQuery.parameter("n", in: url) {
-            if let solvedN = stats.solved?.n[nValue] {
+            // Wirft die n-Funktion einen Fehler, liefert YouTubes Skript „enhanced_except_…“ statt eines Ergebnisses: kein gültiger
+            // Wert, der Videoserver lehnt solche Adressen ab (403). Als ungelöst zählen, damit der nächste Weg drankommt.
+            if let solvedN = stats.solved?.n[nValue], !solvedN.hasPrefix("enhanced_except"), solvedN != nValue {
                 url = URLQuery.replacing("n", with: solvedN, in: url)
                 stats.throttlingSolved += 1
             } else {

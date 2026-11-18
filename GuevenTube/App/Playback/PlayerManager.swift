@@ -224,6 +224,8 @@ final class PlayerManager: ObservableObject {
             let items = c.queryItems ?? []
             let c0 = items.first { $0.name == "c" }?.value ?? "-"
             lines.append("Parameter: c=\(c0) " + items.map(\.name).sorted().joined(separator: ","))
+            // n-Wert (Drosselungs-Parameter, kein Geheimnis): erkennt eine kaputte Entschlüsselung („enhanced_except_…“).
+            if let n = items.first(where: { $0.name == "n" })?.value { lines.append("n=\(n.prefix(40)) (Länge \(n.count))") }
         }
         return (lines, bad, chosen)
     }

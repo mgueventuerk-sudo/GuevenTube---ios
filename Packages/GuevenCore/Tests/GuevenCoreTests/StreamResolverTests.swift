@@ -160,6 +160,18 @@ final class StreamResolverTests: XCTestCase {
         XCTAssertEqual(r.adaptiveFormats.first?.url, "https://rr1.googlevideo.com/videoplayback?id=1&n=NALT")
     }
 
+    func testEnhancedExceptResultCountsAsUnsolved() async throws {
+        let direct = self.direct
+        let solver = FakeSolver()
+        solver.nMap = ["NALT": "enhanced_except_abc_NALT"]
+        let s = make({ profile, _, _, _ in
+            profile.id == "visionos" ? self.unplayable("UNPLAYABLE", "gesperrt") : self.playable(formats: direct)
+        }, solver: solver)
+        let r = try await s.resolver.resolve("vid12345678")
+        XCTAssertTrue(r.throttlingUnsolved, "Fehlerwert der n-Funktion ist keine Entschlüsselung")
+        XCTAssertEqual(r.adaptiveFormats.first?.url, "https://rr1.googlevideo.com/videoplayback?id=1&n=NALT")
+    }
+
     func testSolverUnavailableIsExplained() async throws {
         let direct = self.direct
         let s = make({ profile, _, _, _ in
