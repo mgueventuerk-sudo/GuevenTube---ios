@@ -81,3 +81,7 @@ Noch offen im `link/`-Bereich: „Gemeinsam schauen“ (Watch-Together) und Netz
 
 ## Etappe 11 – Vorschaubilder beim Spulen (fertig, 279 Tests)
 `Storyboard` (Parser der Spezifikation, Stufenwahl, Bild-/Bogenberechnung inkl. Signatur) und `StoryboardRepository` (Cache 8, Fehlschläge 32 gemerkt; erst aus der Player-Antwort, dann leichte Player-Anfrage mit einem TV-Profil; Abbruch zählt nicht als Fehlschlag). Anbindung per Closures, damit ohne Netz testbar.
+
+## Etappe 12 – Download-Logik (fertig, 291 Tests)
+`DownloadStore` (JSON statt Room: neueste zuerst, wartende/laufende für den Neustart, IDs nie wiederverwendet), `DownloadRepository` (Massenauswahl und genaue Formatwahl, Wiederholen, Löschen samt Datei, `resumePending` nach App-Neustart; jeder Auftrag unabhängig), `DownloadPlanner` (Formatwahl wie `DownloadWorker.resolveFormats`, Fortschritt Ton 45 % / Bild bis 90 % / Zusammenfügen, Dateinamen ohne Pfadzeichen, VTT-URL, verständliche Fehlertexte). Abweichung: statt MediaStore-URI steht ein Dateiname im Download-Ordner (`fileLocation`).
+**App-Schicht (Mac):** Hintergrund-`URLSession` (`DownloadScheduling`), Bild+Ton zusammenfügen mit `AVMutableComposition`/`AVAssetExportSession` (Passthrough; ersetzt `Remuxer`), Ablage in „Dateien“/Fotos.
