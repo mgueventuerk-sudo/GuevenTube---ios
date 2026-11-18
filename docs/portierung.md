@@ -50,3 +50,11 @@ Jede Etappe: Tests gegen aufgezeichnete JSON-Antworten (aus Android-Testdaten ü
 
 ## Etappe 4e – DeArrow, Transkript, Abo-Reihenfolge (fertig)
 `DeArrowClient` (Abweichung: Netzfehler werden nicht gemerkt), `Transcript`/`TranscriptSummarizer` (Kurzfassung und Kapitel lokal), `SubscriptionSort`/`SubscriptionDatesStore`. **Bewusst nicht portiert:** `DashManifestGenerator` (AVPlayer spielt kein DASH; für getrennte Bild-/Tonströme braucht iOS einen eigenen Weg: `AVMutableComposition` oder lokal erzeugtes HLS – Entscheidung in der App-Schicht).
+
+## Etappe 4g – Statistik und Feature-Flags (fertig)
+`PlaybackStatsStore` (lokal, 300 Sitzungen), `FeatureFlags` (Standard → Nutzerwahl → Fern-Notschalter, nur ab-schaltend; Android-eigene Schalter entfallen).
+
+## Stand: GuevenCore (161+8 Tests, alle unter Linux grün)
+Fertig: JSON, Parser (Feed/Suche/Player/Watch-Next/Musik), InnerTube-Client, Player-Clients und -Routen, StreamResolver, SponsorBlock, DeArrow, Musik-Warteschlange und -Sitzung, Download-Qualität, Transkript/Kurzfassung, Abo-Reihenfolge, Statistik, Feature-Flags.
+**Noch nicht portiert (Linux-testbar):** Einstellungen (`AppSettings`), Remote-Config-Paket, Verlauf/„Später ansehen“/Playlists-Modelle (Room → SwiftData), Kinder-Modus-Regeln, `link/` (Kopplung, gemeinsames Schauen), Auth (OAuth-Gerätecode).
+**Nur auf dem Mac baubar (nicht angefasst):** SwiftUI-Oberfläche, AVPlayer-Anbindung (inkl. Bild+Ton-Zusammenführung), JavaScriptCore-Entschlüsselung (`ChallengeSolving`), Keychain (`SecretStoring`), Sperrbildschirm/Now-Playing, Hintergrund-Downloads, Biometrie.
