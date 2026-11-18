@@ -7,6 +7,7 @@ struct AccountView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section { NavigationLink("Einstellungen") { SettingsView() } }
                 Section("Anmeldung") { signInSection }
                 Section("Konten") {
                     Button { Task { await model.select(nil) } } label: { check("Gast (ohne Konto)", model.activeId == nil) }

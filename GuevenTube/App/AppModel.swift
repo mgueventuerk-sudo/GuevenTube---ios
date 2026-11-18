@@ -26,10 +26,12 @@ final class AppModel: ObservableObject {
         task = Task { [weak self] in
             guard let self else { return }
             do {
+                let settings = await env.settings.current()
                 let resolved = try await env.resolver.resolve(item.videoId)
                 try Task.checkCancellation()
-                let plan = try PlaybackSourcePlanner.plan(resolved, audioOnly: audioOnly)
+                let plan = try PlaybackSourcePlanner.plan(resolved, maxHeight: settings.maxResolution?.height, audioOnly: audioOnly)
                 Task { await self.loadSponsorSegments(item.videoId) }
+                player.setRate(settings.defaultPlaybackSpeed)
                 player.play(plan, info: .init(title: item.title, artist: item.channelName ?? "",
                                               artworkUrl: URL(string: item.thumbnailUrl)))
             } catch is CancellationError {
