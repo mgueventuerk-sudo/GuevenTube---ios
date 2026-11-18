@@ -21,6 +21,8 @@ final class PlayerManager: ObservableObject {
     @Published private(set) var positionMs: Int64 = 0
     @Published private(set) var durationMs: Int64 = 0
     @Published private(set) var plan: PlaybackPlan?
+    /// Wird ca. 4-mal pro Sekunde mit der Position aufgerufen (SponsorBlock).
+    var onPosition: ((Int64) -> Void)?
 
     private var timeObserver: Any?
     private var itemObservers: [AnyCancellable] = []
@@ -154,6 +156,7 @@ final class PlayerManager: ObservableObject {
     private func tick(_ t: CMTime) {
         guard t.isNumeric, t.seconds.isFinite else { return }
         positionMs = Int64(t.seconds * 1000)
+        if state == .playing { onPosition?(positionMs) }
         if var np = MPNowPlayingInfoCenter.default().nowPlayingInfo, state == .playing || state == .paused {
             np[MPNowPlayingInfoPropertyElapsedPlaybackTime] = t.seconds
             np[MPNowPlayingInfoPropertyPlaybackRate] = state == .playing ? Double(player.rate) : 0.0

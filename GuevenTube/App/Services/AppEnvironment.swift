@@ -16,6 +16,8 @@ final class AppEnvironment: @unchecked Sendable {
     let health: RouteHealth
     let resolver: StreamResolver
     let values: StringValueStore
+    let settings: SettingsStore
+    let sponsorBlock: SponsorBlockClient
 
     static let shared = AppEnvironment()
 
@@ -54,6 +56,10 @@ final class AppEnvironment: @unchecked Sendable {
                                  clock: { Int64(ProcessInfo.processInfo.systemUptime * 1000) })
         let resolver = StreamResolver(endpoint: innerTube, registry: registry, solver: solver, scripts: scripts, health: health)
 
+        let settings = SettingsStore(file: dir(support, "settings").appendingPathComponent("settings.json"))
+        let sponsorBlock = SponsorBlockClient(transport: transport)
+
+        self.settings = settings; self.sponsorBlock = sponsorBlock
         self.transport = transport; self.secrets = secrets; self.accounts = accounts; self.auth = auth; self.oauth = oauth
         self.config = config; self.innerTube = innerTube; self.playerScripts = scripts; self.solver = solver
         self.registry = registry; self.health = health; self.resolver = resolver; self.values = values

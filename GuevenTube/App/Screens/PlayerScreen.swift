@@ -27,6 +27,12 @@ struct PlayerScreen: View {
                 if let msg = errorText { Text(msg).foregroundStyle(.white).padding().multilineTextAlignment(.center) }
             }
             .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay(alignment: .bottomTrailing) {
+                if let s = app.skipPrompt {
+                    Button("\(s.category.displayName) überspringen") { app.skipPrompted() }
+                        .buttonStyle(.borderedProminent).padding(.trailing, 12).padding(.bottom, 56)
+                }
+            }
             if let v = app.current {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(v.title).font(.headline)
