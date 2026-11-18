@@ -30,6 +30,11 @@ struct AccountView: View {
                     NavigationLink("Fernseher (Fernbedienung)") { RemoteView() }
                 }
                 Section("Anmeldung") { signInSection }
+                if !model.log.isEmpty {
+                    Section("Anmelde-Protokoll") {
+                        Text(model.log.joined(separator: "\n")).font(.system(.caption2, design: .monospaced)).textSelection(.enabled)
+                    }
+                }
                 Section("Konten") {
                     Button { Task { await model.select(nil) } } label: { check("Gast (ohne Konto)", model.activeId == nil) }
                     ForEach(model.accounts, id: \.accountId) { a in
@@ -42,7 +47,7 @@ struct AccountView: View {
             }
             .navigationTitle("Konto")
             .task { await model.refresh(); model.resumeIfPending() }
-            .onChange(of: scenePhase) { _, p in if p == .active { model.resumeIfPending() } }
+            .onChange(of: scenePhase) { _, p in if p == .active { Task { await model.refresh() }; model.resumeIfPending() } }
         }
     }
 

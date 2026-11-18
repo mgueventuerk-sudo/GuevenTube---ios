@@ -7,6 +7,8 @@ final class AccountModel: ObservableObject {
     @Published private(set) var state: DeviceAuthState = .idle
     @Published private(set) var accounts: [AccountCredentials] = []
     @Published private(set) var activeId: String?
+    /// Die letzten Schritte der Anmeldung (für Fehlersuche, bleibt über App-Neustarts erhalten).
+    @Published private(set) var log: [String] = UserDefaults.standard.stringArray(forKey: "signInLog") ?? []
 
     private let env = AppEnvironment.shared
     private var task: Task<Void, Never>?
@@ -28,11 +30,18 @@ final class AccountModel: ObservableObject {
         UserDefaults.standard.data(forKey: pendingKey).flatMap { try? JSONDecoder().decode(PendingDeviceAuth.self, from: $0) }
     }
 
+    private func note(_ text: String) {
+        let f = DateFormatter(); f.dateFormat = "HH:mm:ss"
+        log = Array((log + ["\(f.string(from: Date())) \(text)"]).suffix(25))
+        UserDefaults.standard.set(log, forKey: "signInLog")
+    }
+
     func startSignIn(resume: PendingDeviceAuth? = nil) {
         task?.cancel()
         generation += 1
         let mine = generation
-        let flow = DeviceAuthFlow(oauth: env.oauth, profiles: InnerTubeProfileSource(service: env.innerTube), store: env.accounts)
+        let flow = DeviceAuthFlow(oauth: env.oauth, profiles: InnerTubeProfileSource(service: env.innerTube), store: env.accounts,
+                                  trace: { t in Task { @MainActor [weak self] in self?.note(t) } })
         task = Task { [weak self] in
             await flow.run(resume: resume, onPending: { Self.savePending($0) }, report: { s in Task { @MainActor in self?.state = s } })
             await self?.refresh()
@@ -43,7 +52,7 @@ final class AccountModel: ObservableObject {
     /// Hat iOS die App während der Bestätigung im Browser beendet, läuft die Anmeldung mit dem gespeicherten Code weiter.
     func resumeIfPending() {
         guard task == nil, let p = Self.loadPending() else { return }
-        guard p.expiresAtMs > Int64(Date().timeIntervalSince1970 * 1000) else { Self.savePending(nil); return }
+        guard p.expiresAtMs > Int64(Date().timeIntervalSince1970 * 1000) else { Self.savePending(nil); note("Gespeicherter Code abgelaufen"); return }
         startSignIn(resume: p)
     }
 

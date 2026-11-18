@@ -55,11 +55,14 @@ public struct DeviceAuthFlow: Sendable {
     private let store: DeviceAuthAccountStore
     private let nowMs: @Sendable () -> Int64
     private let sleepMs: @Sendable (Int64) async throws -> Void
+    /// Schrittprotokoll für die Oberfläche (ohne Geheimnisse): zeigt bei Problemen, wo die Anmeldung hängt.
+    private let trace: @Sendable (String) -> Void
 
     public init(oauth: DeviceAuthOAuth, profiles: DeviceAuthProfileSource, store: DeviceAuthAccountStore,
                 nowMs: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
-                sleepMs: @escaping @Sendable (Int64) async throws -> Void = { try await Task.sleep(nanoseconds: UInt64($0) * 1_000_000) }) {
-        self.oauth = oauth; self.profiles = profiles; self.store = store; self.nowMs = nowMs; self.sleepMs = sleepMs
+                sleepMs: @escaping @Sendable (Int64) async throws -> Void = { try await Task.sleep(nanoseconds: UInt64($0) * 1_000_000) },
+                trace: @escaping @Sendable (String) -> Void = { _ in }) {
+        self.oauth = oauth; self.profiles = profiles; self.store = store; self.nowMs = nowMs; self.sleepMs = sleepMs; self.trace = trace
     }
 
     /// QR-Inhalt: Bestätigungsadresse mit vorausgefülltem Code.
@@ -81,7 +84,8 @@ public struct DeviceAuthFlow: Sendable {
     @discardableResult
     public func run(resume: PendingDeviceAuth?, onPending: @Sendable (PendingDeviceAuth?) -> Void,
                     report: @Sendable (DeviceAuthState) -> Void) async -> DeviceAuthState {
-        func finish(_ s: DeviceAuthState) -> DeviceAuthState { onPending(nil); report(s); return s }
+        func finish(_ s: DeviceAuthState) -> DeviceAuthState { trace("Ende: \(s)"); onPending(nil); report(s); return s }
+        trace(resume == nil ? "Start" : "Fortsetzen mit gespeichertem Code")
         report(.requestingCode)
         let client: OAuthClientCredentials, code: DeviceCodeResponse
         let expiresAt: Int64
@@ -101,10 +105,12 @@ public struct DeviceAuthFlow: Sendable {
                                         expiresAtMs: expiresAt, intervalSeconds: code.intervalSeconds,
                                         clientId: client.clientId, clientSecret: client.clientSecret))
         }
+        trace("Code \(code.userCode) bereit, warte auf Bestätigung")
         report(.awaitingUser(userCode: code.userCode, verificationUrl: code.verificationUrl,
                              qrContent: Self.qrContent(code.verificationUrl, userCode: code.userCode), expiresAtMs: expiresAt))
         var intervalMs = max(code.intervalSeconds, Self.minIntervalSeconds) * 1000
         var consecutiveFailures = 0
+        var pollNumber = 0
         // Fortgesetzter Code: Der Nutzer hat meist schon bestätigt, also sofort abfragen statt erst zu warten.
         var skipSleep = resume != nil && resume!.expiresAtMs > nowMs()
         while nowMs() < expiresAt {
@@ -112,7 +118,15 @@ public struct DeviceAuthFlow: Sendable {
                 do { try await sleepMs(intervalMs) } catch { return finish(.idle) }
             }
             let result: TokenPollResult
-            do { result = try await oauth.pollToken(deviceCode: code.deviceCode, client: client) } catch { return finish(.idle) }
+            pollNumber += 1
+            do { result = try await oauth.pollToken(deviceCode: code.deviceCode, client: client) } catch {
+                trace("Abfrage \(pollNumber): abgebrochen (\(type(of: error)))"); return finish(.idle)
+            }
+            switch result {
+            case .failure(let r): trace("Abfrage \(pollNumber): Fehler \(r)")
+            case .success: trace("Abfrage \(pollNumber): Token erhalten")
+            default: if pollNumber <= 2 || pollNumber % 6 == 0 { trace("Abfrage \(pollNumber): \(result)") }
+            }
             switch result {
             case .pending: consecutiveFailures = 0
             case .failure(let reason):
@@ -141,6 +155,7 @@ public struct DeviceAuthFlow: Sendable {
             return finish(.failed("Google hat keinen Refresh-Token geliefert."))
         }
         let info = (try? await profiles.accountInfo(accessToken: tokens.accessToken)) ?? nil
+        trace("Profil geladen: \(info == nil ? "nein" : "ja")")
         // Erneute Anmeldung desselben Kanals ersetzt das bestehende Konto statt eine Kopie anzulegen.
         var existing: AccountCredentials?
         if let channel = info?.channelId { existing = await store.credentialsForChannel(channel) }
@@ -152,7 +167,9 @@ public struct DeviceAuthFlow: Sendable {
                                                        nowMs: nowMs(), createdAtMs: existing?.createdAtEpochMs)
             // Abbruch-Wettlauf: nach Abbruch wird nichts gespeichert.
             if Task.isCancelled { return finish(.idle) }
-            guard await store.saveActive(credentials) else { return finish(.failed("Konto konnte nicht gespeichert werden.")) }
+            let saved = await store.saveActive(credentials)
+            trace("Speichern: \(saved ? "ok" : "FEHLER")")
+            guard saved else { return finish(.failed("Konto konnte nicht gespeichert werden.")) }
             return finish(.success(accountId: accountId, displayName: name))
         } catch {
             return finish(.failed("Konto konnte nicht gespeichert werden: \((error as? OAuthError)?.message ?? error.localizedDescription)"))

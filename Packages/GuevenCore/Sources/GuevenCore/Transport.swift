@@ -32,11 +32,25 @@ public protocol HTTPTransport: Sendable {
 /// Produktiver Transport über `URLSession`.
 public struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
-    public init(session: URLSession = .shared) { self.session = session }
+    /// Wie die Android-App (OkHttp ohne Cookie-Speicher): keine Cookies speichern oder senden, nur das, was Anfragen ausdrücklich
+    /// mitgeben. Sonst klebt am iPhone ein Besucher-Cookie von `youtube.com/tv` an allen Anfragen und passt nicht zur `visitorData`.
+    public static let cookieFreeSession: URLSession = {
+        let c = URLSessionConfiguration.ephemeral
+        c.httpCookieStorage = nil
+        c.httpShouldSetCookies = false
+        c.httpCookieAcceptPolicy = .never
+        c.requestCachePolicy = .reloadIgnoringLocalCacheData
+        c.urlCache = nil
+        c.timeoutIntervalForRequest = 30
+        return URLSession(configuration: c)
+    }()
+
+    public init(session: URLSession = URLSessionTransport.cookieFreeSession) { self.session = session }
 
     public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         var r = URLRequest(url: request.url)
         r.httpMethod = request.method
+        r.httpShouldHandleCookies = false
         r.httpBody = request.body
         for (k, v) in request.headers { r.setValue(v, forHTTPHeaderField: k) }
         let (data, response) = try await session.data(for: r)
