@@ -5,11 +5,18 @@ struct LibraryView: View {
     @EnvironmentObject var app: AppModel
     @State private var continueWatching: [VideoItem] = []
     @State private var watchLater: [VideoItem] = []
+    @State private var signedIn = false
     private let library = AppEnvironment.shared.library
 
     var body: some View {
         NavigationStack {
             List {
+                if signedIn {
+                    Section("YouTube-Konto") {
+                        NavigationLink("Verlauf") { HistoryView() }
+                        NavigationLink("Abos") { SubscriptionsView() }
+                    }
+                }
                 if continueWatching.isEmpty && watchLater.isEmpty { Text("Noch nichts gespeichert.").foregroundStyle(.secondary) }
                 if !continueWatching.isEmpty {
                     Section("Weiterschauen") {
@@ -37,6 +44,7 @@ struct LibraryView: View {
     }
 
     private func reload() async {
+        signedIn = await app.env.innerTube.hasAccount()
         continueWatching = await library.continueWatching()
         watchLater = await library.watchLaterItems()
     }
