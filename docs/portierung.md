@@ -99,3 +99,7 @@ Noch offen im `link/`-Bereich: „Gemeinsam schauen“ (Watch-Together) und Netz
 
 ## Etappe 16 – Sicherer Speicher (340 Tests)
 `SecretBackend` (Keychain auf Apple – `KeychainSecretBackend`, **ungetestet bis zum Mac-Lauf**, `AfterFirstUnlockThisDeviceOnly` wegen Hintergrundwiedergabe; im Speicher für Tests) mit den Adaptern `BackendSecretStore` (`SecretStoring`: visitorData, Kopplungen), `BackendProfileLockStore` (Geheimnisse im Backend, einfache Werte in `StringValueStore`; unlesbarer PIN-Eintrag zählt als gesetzt) und `KeychainAccountStore` (`AccountCredentialStore` + Konten anlegen/wechseln/entfernen, Gast, Profil-/SAPISID-Update; je Konto ein Eintrag, beschädigte werden übersprungen, fehlgeschlagene Schreibvorgänge melden `false`). 8 Tests unter Linux.
+
+## Etappe 17 – Wiedergabe-Planung (fertig, 348 Tests)
+`PlaybackSourcePlanner.plan(_:maxHeight:audioOnly:)` wählt aus `ResolvedPlayback` genau eine für AVPlayer abspielbare Quelle: Live → HLS; nur Ton → bestes AAC, sonst muxed avc1, sonst HLS; Video → getrennt (H.264 + AAC) nur wenn höher als das beste muxed Format innerhalb des Limits, sonst muxed, sonst niedrigstes Format über dem Limit, sonst HLS, sonst Fehler. **Nie VP9/AV1/WebM/Opus** (AVPlayer spielt sie nicht zuverlässig). `PlaybackPlan` trägt User-Agent, `throttled`, `isLive`.
+**App-Schicht (Mac, ungetestet):** AVPlayer-Manager baut aus dem Plan `AVURLAsset` (UA via `AVURLAssetHTTPHeaderFieldsKey`) bzw. `AVMutableComposition` für `separate`.
