@@ -85,3 +85,7 @@ Noch offen im `link/`-Bereich: „Gemeinsam schauen“ (Watch-Together) und Netz
 ## Etappe 12 – Download-Logik (fertig, 291 Tests)
 `DownloadStore` (JSON statt Room: neueste zuerst, wartende/laufende für den Neustart, IDs nie wiederverwendet), `DownloadRepository` (Massenauswahl und genaue Formatwahl, Wiederholen, Löschen samt Datei, `resumePending` nach App-Neustart; jeder Auftrag unabhängig), `DownloadPlanner` (Formatwahl wie `DownloadWorker.resolveFormats`, Fortschritt Ton 45 % / Bild bis 90 % / Zusammenfügen, Dateinamen ohne Pfadzeichen, VTT-URL, verständliche Fehlertexte). Abweichung: statt MediaStore-URI steht ein Dateiname im Download-Ordner (`fileLocation`).
 **App-Schicht (Mac):** Hintergrund-`URLSession` (`DownloadScheduling`), Bild+Ton zusammenfügen mit `AVMutableComposition`/`AVAssetExportSession` (Passthrough; ersetzt `Remuxer`), Ablage in „Dateien“/Fotos.
+
+## Etappe 13 – Gemeinsam schauen, Selbsttest, Sofortstart (fertig, 305 Tests)
+`WatchTogether.plan` (Position mit 600 ms Vorlauf, Toleranz 2 s, Live öffnet nur, beim Puffern des TV nichts tun), `PlaybackSelfTest` (täglich, 1-KB-Probe mit Range und passendem User-Agent, Frühwarnung bei Bot-Prüfung/SABR, läuft nie doppelt, Ergebnis dauerhaft), `PlaybackPrefetcher` (wahrscheinlich vor spekulativ, 1 bzw. 2 Plätze mit Verdrängung, 10-min-Wiederholsperre, nur WLAN für spekulative, 20-s-Zeitlimit). Medien vorladen (`MediaPreloader`) bleibt App-Schicht (`afterResolved`-Haken).
+**Damit ist die Linux-testbare Logik vollständig portiert.** Offen sind nur noch App-Schicht und Mac-Build.
