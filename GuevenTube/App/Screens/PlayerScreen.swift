@@ -17,6 +17,7 @@ struct SystemPlayer: UIViewControllerRepresentable {
 struct PlayerScreen: View {
     @EnvironmentObject var app: AppModel
     @ObservedObject var player: PlayerManager
+    @StateObject private var downloads = DownloadsModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +38,11 @@ struct PlayerScreen: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(v.title).font(.headline)
                     Text(v.channelName ?? "").font(.subheadline).foregroundStyle(.secondary)
+                    Menu("Herunterladen") {
+                        ForEach([DownloadQuality.audioOnly, .hd, .fullHd], id: \.self) { q in
+                            Button(q.label) { downloads.enqueue(v, quality: q) }
+                        }
+                    }
                     if let q = player.plan?.qualityLabel {
                         Text(q + (player.plan?.throttled == true ? " · gedrosselt" : "")).font(.caption).foregroundStyle(.secondary)
                     }

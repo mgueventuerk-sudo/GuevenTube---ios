@@ -17,6 +17,9 @@ final class AppEnvironment: @unchecked Sendable {
     let resolver: StreamResolver
     let values: StringValueStore
     let settings: SettingsStore
+    let downloadStore: DownloadStore
+    let downloadManager: DownloadManager
+    let downloads: DownloadRepository
     let sponsorBlock: SponsorBlockClient
 
     static let shared = AppEnvironment()
@@ -59,6 +62,12 @@ final class AppEnvironment: @unchecked Sendable {
         let settings = SettingsStore(file: dir(support, "settings").appendingPathComponent("settings.json"))
         let sponsorBlock = SponsorBlockClient(transport: transport)
 
+        let downloadStore = DownloadStore(file: dir(support, "downloads").appendingPathComponent("downloads.json"))
+        let downloadManager = DownloadManager(store: downloadStore, resolver: resolver)
+        let downloads = DownloadRepository(store: downloadStore, scheduler: downloadManager, removeFile: { name in
+            try? FileManager.default.removeItem(at: DownloadManager.downloadsDirectory.appendingPathComponent(name))
+        })
+        self.downloadStore = downloadStore; self.downloadManager = downloadManager; self.downloads = downloads
         self.settings = settings; self.sponsorBlock = sponsorBlock
         self.transport = transport; self.secrets = secrets; self.accounts = accounts; self.auth = auth; self.oauth = oauth
         self.config = config; self.innerTube = innerTube; self.playerScripts = scripts; self.solver = solver

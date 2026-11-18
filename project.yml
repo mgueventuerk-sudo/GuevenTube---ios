@@ -23,6 +23,8 @@ targets:
         CFBundleDisplayName: GuevenTube
         UILaunchScreen: {}
         UIBackgroundModes: [audio]
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSAppTransportSecurity: {NSAllowsArbitraryLoads: false}
     settings:
