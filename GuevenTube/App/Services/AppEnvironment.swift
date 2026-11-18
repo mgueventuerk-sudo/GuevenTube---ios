@@ -15,6 +15,7 @@ final class AppEnvironment: @unchecked Sendable {
     let registry: PlayerClientRegistry
     let health: RouteHealth
     let resolver: StreamResolver
+    let poTokens: PoTokenMinter
     let values: StringValueStore
     let settings: SettingsStore
     let library: LocalLibrary
@@ -62,7 +63,10 @@ final class AppEnvironment: @unchecked Sendable {
             signedConfig: { nil })
         let health = RouteHealth(store: DefaultsPreferredRouteStore(),
                                  clock: { Int64(ProcessInfo.processInfo.systemUptime * 1000) })
-        let resolver = StreamResolver(endpoint: innerTube, registry: registry, solver: solver, scripts: scripts, health: health)
+        // PO-Token (BotGuard im unsichtbaren WKWebView): Safari spielt im selben Netz ab, die App ohne diesen Schlüssel nicht.
+        let poTokens = PoTokenMinter(transport: transport)
+        let resolver = StreamResolver(endpoint: innerTube, registry: registry, solver: solver, scripts: scripts,
+                                      poTokens: poTokens, health: health, autoPoToken: true, alwaysPoToken: true)
 
         let settings = SettingsStore(file: dir(support, "settings").appendingPathComponent("settings.json"))
         let sponsorBlock = SponsorBlockClient(transport: transport)
@@ -83,6 +87,6 @@ final class AppEnvironment: @unchecked Sendable {
         self.settings = settings; self.sponsorBlock = sponsorBlock
         self.transport = transport; self.secrets = secrets; self.accounts = accounts; self.auth = auth; self.oauth = oauth
         self.config = config; self.innerTube = innerTube; self.playerScripts = scripts; self.solver = solver
-        self.registry = registry; self.health = health; self.resolver = resolver; self.values = values
+        self.registry = registry; self.health = health; self.resolver = resolver; self.poTokens = poTokens; self.values = values
     }
 }

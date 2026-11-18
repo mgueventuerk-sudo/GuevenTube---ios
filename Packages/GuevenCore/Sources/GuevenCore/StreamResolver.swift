@@ -143,6 +143,7 @@ public actor StreamResolver {
     private let nowMs: @Sendable () -> Int64
     private let sleepMs: @Sendable (Int64) async throws -> Void
     private let autoPoToken: Bool
+    private let alwaysPoToken: Bool
 
     private var cache = LRUCache<ResolvedPlayback>(capacity: StreamResolver.cacheSize)
     private var rejectedRoutes = LRUCache<Set<String>>(capacity: StreamResolver.cacheSize)
@@ -157,11 +158,11 @@ public actor StreamResolver {
 
     public init(endpoint: PlayerEndpoint, registry: ClientProfileProviding, solver: ChallengeSolving, scripts: PlayerScriptProviding,
                 poTokens: PoTokenProviding = NoPoTokens(), health: RouteHealth, timings: ResolverTimings = ResolverTimings(),
-                autoPoToken: Bool = false,
+                autoPoToken: Bool = false, alwaysPoToken: Bool = false,
                 nowMs: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
                 sleepMs: @escaping @Sendable (Int64) async throws -> Void = { try await Task.sleep(nanoseconds: UInt64($0) * 1_000_000) }) {
         self.endpoint = endpoint; self.registry = registry; self.solver = solver; self.scripts = scripts
-        self.poTokens = poTokens; self.health = health; self.timings = timings; self.autoPoToken = autoPoToken
+        self.poTokens = poTokens; self.health = health; self.timings = timings; self.autoPoToken = autoPoToken; self.alwaysPoToken = alwaysPoToken
         self.nowMs = nowMs; self.sleepMs = sleepMs
     }
 
@@ -270,7 +271,7 @@ public actor StreamResolver {
     private func resolveFresh(_ videoId: String) async throws -> ResolvedPlayback {
         let deadline = nowMs() + totalTimeoutMs()
         let kinds = KindSet()
-        var tokens = await poTokens.tokens(videoId: videoId, visitorData: await endpoint.currentVisitorData(), generate: autoPoToken && poTokenDemand)
+        var tokens = await poTokens.tokens(videoId: videoId, visitorData: await endpoint.currentVisitorData(), generate: autoPoToken && (poTokenDemand || alwaysPoToken))
         let resolved: ResolvedPlayback
         do {
             resolved = try await resolveRoutes(videoId, tokens: tokens, timeoutMs: max(deadline - nowMs(), timings.minRetryMs), kinds: kinds)

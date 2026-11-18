@@ -49,6 +49,12 @@ final class FakeScripts: PlayerScriptProviding, @unchecked Sendable {
     func clear() async {}
 }
 
+struct GeneratingPoTokens: PoTokenProviding {
+    func tokens(videoId: String, visitorData: String?, generate: Bool) async -> PoTokens? {
+        generate && visitorData != nil ? PoTokens(player: "PLAYER", streaming: "STREAM", generated: true) : nil
+    }
+}
+
 struct FixedPoTokens: PoTokenProviding {
     var token: String?
     func tokens(videoId: String, visitorData: String?, generate: Bool) async -> PoTokens? { token.map { PoTokens(player: $0, streaming: $0, generated: false) } }
@@ -246,6 +252,19 @@ final class StreamResolverTests: XCTestCase {
         let r = try await s.resolver.resolve("vid12345678")
         XCTAssertEqual(r.clientLabel, "visionOS", "zweiter Durchlauf nach dem Zurücksetzen der Besucher-Kennung")
         XCTAssertEqual(counter.n, 2)
+    }
+
+    func testAlwaysPoTokenSendsPlayerTokenAndAppendsStreamingToken() async throws {
+        final class Seen: @unchecked Sendable { var tokens: [String?] = [] }
+        let seen = Seen()
+        let direct = self.direct
+        let endpoint = FakeEndpoint { _, _, _, poToken in seen.tokens.append(poToken); return self.playable(formats: direct) }
+        let clock = ResolverClock()
+        let resolver = StreamResolver(endpoint: endpoint, registry: FakeRegistry(), solver: FakeSolver(), scripts: FakeScripts(), poTokens: GeneratingPoTokens(),
+                                      health: RouteHealth(store: MemStore()) { clock.now }, autoPoToken: true, alwaysPoToken: true, nowMs: { clock.now })
+        let r = try await resolver.resolve("vid12345678")
+        XCTAssertEqual(seen.tokens.first ?? nil, "PLAYER", "/player bekommt den an die Video-ID gebundenen Token")
+        XCTAssertEqual(r.adaptiveFormats.first?.url, "https://rr1.googlevideo.com/videoplayback?id=1&n=NALT&pot=STREAM", "Stream-URL bekommt den an die visitorData gebundenen Token")
     }
 
     func testSabrOnlyResponseIsReportedAsSabrKind() async {

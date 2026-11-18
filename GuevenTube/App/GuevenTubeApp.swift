@@ -23,6 +23,8 @@ struct GuevenTubeApp: App {
     init() {
         // Hintergrundwiedergabe: Audio-Sitzung "playback" (Info.plist: UIBackgroundModes=audio).
         Task { await AppEnvironment.shared.downloads.resumePending() }
+        // Der PO-Token-Generator braucht ein Fenster: kurz nach dem Start im Hintergrund vorbauen.
+        Task { try? await Task.sleep(nanoseconds: 2_000_000_000); await AppEnvironment.shared.poTokens.warmUp() }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
     }
 
