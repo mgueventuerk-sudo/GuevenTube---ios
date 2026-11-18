@@ -26,6 +26,7 @@ final class PlayerManager: ObservableObject {
 
     private var timeObserver: Any?
     private var itemObservers: [AnyCancellable] = []
+    private var statusObserver: AnyCancellable?
     private var loadTask: Task<Void, Never>?
     private var info: NowPlaying?
     private var remoteTargets: [(MPRemoteCommand, Any)] = []
@@ -35,6 +36,13 @@ final class PlayerManager: ObservableObject {
         // 4 Hz reicht für Fortschrittsleiste und SponsorBlock-Überspringen.
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 4), queue: .main) { [weak self] t in
             MainActor.assumeIsolated { self?.tick(t) }
+        }
+        // Anruf, Siri, Kopfhörer abziehen oder Bild-in-Bild pausieren den Player am Code vorbei: Zustand nachziehen,
+        // sonst zeigen Play-Taste, Sperrbildschirm und Kindermodus-Zeitzähler etwas Falsches.
+        statusObserver = player.publisher(for: \.timeControlStatus).receive(on: DispatchQueue.main).sink { [weak self] status in
+            guard let self else { return }
+            if status == .paused, self.state == .playing { self.state = .paused; self.publishNowPlaying() }
+            else if status == .playing, self.state == .paused { self.state = .playing; self.publishNowPlaying() }
         }
         configureRemoteCommands()
     }

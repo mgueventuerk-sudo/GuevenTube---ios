@@ -268,7 +268,7 @@ public actor InnerTubeService {
             }
             let retryable = response == nil || response!.code == 429 || (500...599).contains(response!.code)
             if !retryable || attempt >= Self.maxRetries { return response! }
-            let backoff = response?.retryAfterSeconds.map { min($0 * 1000, Self.maxBackoffMs) } ?? (Self.baseBackoffMs << Int64(attempt))
+            let backoff = response?.retryAfterSeconds.map { min(min(max($0, 0), 3_600) * 1000, Self.maxBackoffMs) } ?? (Self.baseBackoffMs << Int64(attempt))
             try await sleepMs(backoff)
             attempt += 1
         }

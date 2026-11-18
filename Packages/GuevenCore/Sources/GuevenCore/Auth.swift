@@ -253,7 +253,7 @@ public actor OAuthClient {
 
     private static func tokenResponse(_ element: JSON) -> TokenResponse? {
         guard let access = element.str("access_token") else { return nil }
-        return TokenResponse(accessToken: access, expiresInSeconds: element.long("expires_in") ?? 3600, refreshToken: element.str("refresh_token"),
+        return TokenResponse(accessToken: access, expiresInSeconds: min(max(element.long("expires_in") ?? 3600, 0), 31_536_000), refreshToken: element.str("refresh_token"),
                              scope: element.str("scope"), tokenType: element.str("token_type") ?? "Bearer")
     }
 

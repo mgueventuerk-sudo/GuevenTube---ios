@@ -23,6 +23,15 @@ final class DeepLinkTests: XCTestCase {
         XCTAssertNil(DeepLink.parse("not a url"))
     }
 
+    func testHugeTimestampsDoNotOverflow() {
+        let id = "dQw4w9WgXcQ"
+        // Früher: n * 3600 lief über und beendete die App.
+        XCTAssertEqual(DeepLink.parse("https://youtu.be/\(id)?t=9000000000000000h"), .play(videoId: id, startSeconds: nil))
+        XCTAssertEqual(DeepLink.parse("https://youtu.be/\(id)?t=9223372036854775807"), .play(videoId: id, startSeconds: nil))
+        XCTAssertEqual(DeepLink.parse("https://youtu.be/\(id)?t=99999999999999999999m"), .play(videoId: id, startSeconds: nil))
+        XCTAssertEqual(DeepLink.parse("https://youtu.be/\(id)?t=1000000000"), .play(videoId: id, startSeconds: 1_000_000_000))
+    }
+
     func testPairLinkIsRouted() {
         let uri = "gueventube://pair?h=192.168.1.20&p=4711&fp=abc&tk=secret&n=Wohnzimmer"
         guard case .pair(let req)? = DeepLink.parse(uri) else { return XCTFail("pair erwartet") }

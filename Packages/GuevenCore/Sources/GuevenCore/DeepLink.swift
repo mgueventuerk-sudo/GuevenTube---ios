@@ -40,13 +40,16 @@ public enum DeepLink: Equatable, Sendable {
         s.utf8.count == 11 && s.utf8.allSatisfy { ($0 >= 48 && $0 <= 57) || ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || $0 == 45 || $0 == 95 } ? s : nil
     }
 
+    /// Obergrenze je Angabe (ca. 31 Jahre): größere Werte aus fremden Links würden beim Umrechnen überlaufen und die App abstürzen lassen.
+    static let maxSeconds = 1_000_000_000
+
     /// `90`, `90s` oder `1h2m3s`.
     static func parseSeconds(_ s: String) -> Int? {
-        if let n = Int(s.hasSuffix("s") ? String(s.dropLast()) : s) { return n >= 0 ? n : nil }
+        if let n = Int(s.hasSuffix("s") ? String(s.dropLast()) : s) { return (0...maxSeconds).contains(n) ? n : nil }
         var total = 0, num = ""
         for ch in s {
             if ch.isNumber { num.append(ch); continue }
-            guard let n = Int(num) else { return nil }
+            guard let n = Int(num), n <= maxSeconds else { return nil }
             switch ch { case "h": total += n * 3600; case "m": total += n * 60; case "s": total += n; default: return nil }
             num = ""
         }

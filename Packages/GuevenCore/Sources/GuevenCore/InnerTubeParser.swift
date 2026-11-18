@@ -446,7 +446,7 @@ public enum InnerTubeParser {
             adaptiveFormats: (streamingData.arr("adaptiveFormats") ?? []).compactMap(parseFormat),
             muxedFormats: (streamingData.arr("formats") ?? []).compactMap(parseFormat),
             hlsManifestUrl: streamingData.str("hlsManifestUrl"),
-            expiresInSeconds: streamingData.long("expiresInSeconds"),
+            expiresInSeconds: streamingData.long("expiresInSeconds").map { min(max($0, 0), 31_536_000) },
             captions: (root.path("captions", "playerCaptionsTracklistRenderer").arr("captionTracks") ?? []).compactMap(parseCaption),
             loudnessDb: root.path("playerConfig", "audioConfig").double("loudnessDb"),
             storyboardSpec: root.path("storyboards", "playerStoryboardSpecRenderer").str("spec"),

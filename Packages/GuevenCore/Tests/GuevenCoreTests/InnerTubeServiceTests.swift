@@ -106,6 +106,16 @@ final class InnerTubeServiceTests: XCTestCase {
         XCTAssertEqual(sleeps.all, [8_000])
     }
 
+    func testExtremeOrNegativeRetryAfterIsHarmless() async throws {
+        // Früher: Int64.max * 1000 lief über (Absturz), ein negativer Wert ergab eine negative Wartezeit.
+        for value: Int64 in [Int64.max, -5] {
+            let sleeps = SleepLog()
+            let (service, _) = make([code(429, retryAfter: value), ok("{}")], sleeps: sleeps)
+            _ = try await service.search(query: "x")
+            XCTAssertEqual(sleeps.all, [value > 0 ? 8_000 : 0])
+        }
+    }
+
     func test401RefreshesTokenOnceAndRetries() async throws {
         let auth = FakeAuth(AuthToken(accessToken: "ALT", accountId: "acc"))
         let (service, transport) = make([code(401), ok("{}")], auth: auth)
