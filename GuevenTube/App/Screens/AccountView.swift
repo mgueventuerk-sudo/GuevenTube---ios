@@ -62,22 +62,18 @@ struct AccountView: View {
         case .requestingCode, .completing:
             HStack { ProgressView(); Text("Bitte warten …").padding(.leading, 8) }
         case .awaitingUser(let code, let url, let qr, _):
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Öffne die Seite und gib diesen Code ein:")
-                Text(code).font(.system(.largeTitle, design: .monospaced).bold()).textSelection(.enabled)
-                if let u = URL(string: qr) { Link(url, destination: u) }
-                Button("Abbrechen", role: .cancel) { model.cancelSignIn() }
-            }
+            // Jede Zeile einzeln und mit .borderless: In einer Form löst sonst ein Tipp auf den Link ALLE Buttons der Zeile aus,
+            // also auch „Abbrechen“. Genau das hat die Anmeldung eine Sekunde nach dem Öffnen von Safari beendet.
+            Text("Öffne die Seite und gib diesen Code ein:")
+            Text(code).font(.system(.largeTitle, design: .monospaced).bold()).textSelection(.enabled)
+            if let u = URL(string: qr) { Link(url, destination: u).buttonStyle(.borderless) }
+            Button("Abbrechen", role: .cancel) { model.cancelSignIn() }.buttonStyle(.borderless)
         case .success(_, let name):
-            VStack(alignment: .leading) {
-                Text("Angemeldet als \(name)")
-                Button("OK") { model.cancelSignIn() }
-            }
+            Text("Angemeldet als \(name)")
+            Button("OK") { model.cancelSignIn() }.buttonStyle(.borderless)
         case .failed(let message):
-            VStack(alignment: .leading, spacing: 8) {
-                Text(message).foregroundStyle(.red)
-                Button("Erneut versuchen") { model.startSignIn() }
-            }
+            Text(message).foregroundStyle(.red)
+            Button("Erneut versuchen") { model.startSignIn() }.buttonStyle(.borderless)
         }
     }
 }
