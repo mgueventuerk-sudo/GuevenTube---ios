@@ -74,8 +74,8 @@ final class AppModel: ObservableObject {
             do {
                 let settings = await env.settings.current()
                 let resolved = try await env.resolver.resolve(item.videoId)
-                captions = resolved.playerData.captions
                 try Task.checkCancellation()
+                captions = resolved.playerData.captions
                 let plan = try PlaybackSourcePlanner.plan(resolved, maxHeight: settings.maxResolution?.height, audioOnly: audioOnly)
                 Task { await self.loadSponsorSegments(item.videoId) }
                 // `await` darf nicht in einem `??`-Autoclosure stehen: darum ausgeschrieben.
@@ -83,6 +83,8 @@ final class AppModel: ObservableObject {
                 if audioOnly { resume = 0 }
                 else if let startAtMs { resume = startAtMs }
                 else { resume = await env.library.resumePositionMs(item.videoId) }
+                // Ein neueres play() darf nicht von diesem veralteten Aufruf überschrieben werden.
+                try Task.checkCancellation()
                 player.setRate(settings.defaultPlaybackSpeed)
                 player.play(plan, startAtMs: resume, info: .init(title: item.title, artist: item.channelName ?? "",
                                               artworkUrl: URL(string: item.thumbnailUrl)))

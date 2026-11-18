@@ -192,7 +192,11 @@ final class PlayerManager: ObservableObject {
     private func configureRemoteCommands() {
         let c = MPRemoteCommandCenter.shared()
         func add(_ cmd: MPRemoteCommand, _ handler: @escaping @MainActor (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus) {
-            let target = cmd.addTarget { e in MainActor.assumeIsolated { handler(e) } }
+            // assumeIsolated stürzt ab, wenn iOS den Handler nicht auf dem Main-Thread ruft: dann dorthin wechseln.
+            let target = cmd.addTarget { e in
+                if Thread.isMainThread { return MainActor.assumeIsolated { handler(e) } }
+                return DispatchQueue.main.sync { MainActor.assumeIsolated { handler(e) } }
+            }
             remoteTargets.append((cmd, target))
         }
         add(c.playCommand) { [weak self] _ in self?.resume(); return .success }

@@ -9,8 +9,11 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var pendingPair: PairRequest?
 
+    /// Genau ein AppModel, auch wenn SwiftUI `RootView.init` mehrfach aufruft (sonst hängt LinkModel an einer verworfenen Instanz).
+    private static let sharedApp = AppModel()
+
     init() {
-        let a = AppModel()
+        let a = Self.sharedApp
         _app = StateObject(wrappedValue: a)
         LinkModel.shared.app = a
         _music = StateObject(wrappedValue: MusicModel(app: a))
