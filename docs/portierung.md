@@ -70,3 +70,6 @@ Fertig: JSON, Parser (Feed/Suche/Player/Watch-Next/Musik), InnerTube-Client, Pla
 
 ## Etappe 8 – Einstellungen (fertig, 241 Tests)
 `AppSettings` + `SettingsStore` (Actor, JSON-Datei mit denselben Schlüsseln wie Android-DataStore, nur Abweichungen vom Standard gespeichert, kaputte Werte → Standard, Tempo 0,25–3,0 begrenzt, Kinder-Limits begrenzt, Änderungs-Stream). Entfallen: Cronet, Fokusrahmen, Ambient, YouTube-App-Kopplung (TV/Android); Theme „DYNAMIC“ → System.
+
+## Etappe 9 – Signiertes Fernpaket (fertig, 251 Tests)
+`SignedConfig`, `SignedConfigVerifier`, `SignedConfigRepository` (Schema 1, 256 KB-Grenze, Rückspielschutz mit dauerhafter Versions-Untergrenze, gleiche Version nur mit identischem Inhalt, atomares Bündel aus Signatur+Paket, gespeicherte Kopie wird bei jedem Start neu geprüft, 6-h-Intervall, nur https). Die ECDSA-Prüfung steckt hinter `SignatureVerifying`; unter Linux getestet mit einem Hash-Stellvertreter, auf Apple prüft `CryptoKitSignatureVerifier` (P-256, DER) mit demselben Herausgeber-Schlüssel wie Android – **dieser Teil ist ungetestet bis zum ersten Mac-Lauf** (Test mit echter Signatur aus dem Android-Repo dann ergänzen).
