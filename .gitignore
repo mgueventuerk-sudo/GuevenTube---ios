@@ -5,3 +5,4 @@ xcuserdata/
 *.p12
 *.mobileprovision
 *.pem
+.build/

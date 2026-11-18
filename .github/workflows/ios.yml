@@ -5,6 +5,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - run: swift test --package-path Packages/GuevenCore
       - run: brew install xcodegen
       - run: xcodegen generate
       - name: Tests

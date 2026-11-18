@@ -1,4 +1,7 @@
 name: GuevenTube
+packages:
+  GuevenCore:
+    path: Packages/GuevenCore
 options:
   bundleIdPrefix: de.gueventube
   deploymentTarget:
@@ -13,6 +16,7 @@ targets:
     type: application
     platform: iOS
     sources: [GuevenTube]
+    dependencies: [{package: GuevenCore}]
     info:
       path: GuevenTube/Info.plist
       properties:
