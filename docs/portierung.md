@@ -67,3 +67,6 @@ Fertig: JSON, Parser (Feed/Suche/Player/Watch-Next/Musik), InnerTube-Client, Pla
 
 ## Etappe 7 – Lokale Bibliothek (fertig, 235 Tests)
 `LocalLibrary` (Actor, eine JSON-Datei statt Room): Weitersehen (ab 30 s, unter 95 %), Fortschrittsbalken, Fortsetz-Position, Abgleich mit gekoppeltem Gerät (nur neuere Einträge), „Später ansehen“ und Merklisten (eindeutige Namen, Löschen mit Einträgen), lokale Abos, Suchverlauf (30). Beschädigte Datei → leer starten. SwiftData ist damit nicht nötig.
+
+## Etappe 8 – Einstellungen (fertig, 241 Tests)
+`AppSettings` + `SettingsStore` (Actor, JSON-Datei mit denselben Schlüsseln wie Android-DataStore, nur Abweichungen vom Standard gespeichert, kaputte Werte → Standard, Tempo 0,25–3,0 begrenzt, Kinder-Limits begrenzt, Änderungs-Stream). Entfallen: Cronet, Fokusrahmen, Ambient, YouTube-App-Kopplung (TV/Android); Theme „DYNAMIC“ → System.
