@@ -232,6 +232,22 @@ final class StreamResolverTests: XCTestCase {
         } catch { XCTFail("\(error)") }
     }
 
+    func testBotCheckRetriesOnceWithFreshVisitorData() async throws {
+        final class Counter: @unchecked Sendable { var n = 0 }
+        let counter = Counter()
+        let direct = self.direct
+        let s = make({ profile, _, _, _ in
+            if profile.id == "visionos" {
+                counter.n += 1
+                return counter.n == 1 ? self.unplayable("LOGIN_REQUIRED", "Sign in to confirm you’re not a bot") : self.playable(formats: direct)
+            }
+            throw InnerTubeError(statusCode: 403, message: "x")
+        })
+        let r = try await s.resolver.resolve("vid12345678")
+        XCTAssertEqual(r.clientLabel, "visionOS", "zweiter Durchlauf nach dem Zurücksetzen der Besucher-Kennung")
+        XCTAssertEqual(counter.n, 2)
+    }
+
     func testSabrOnlyResponseIsReportedAsSabrKind() async {
         let s = make({ _, _, _, _ in
             self.playable(formats: #"{"itag":251,"mimeType":"audio/webm; codecs=\"opus\"","bitrate":1}"#, extra: #","serverAbrStreamingUrl":"https://sabr""#)

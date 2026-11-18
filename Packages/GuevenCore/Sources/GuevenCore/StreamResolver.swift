@@ -275,6 +275,18 @@ public actor StreamResolver {
         do {
             resolved = try await resolveRoutes(videoId, tokens: tokens, timeoutMs: max(deadline - nowMs(), timings.minRetryMs), kinds: kinds)
         } catch let first as PlaybackUnavailableError {
+            // Bot-Prüfung trotz gespeicherter visitorData: Der Eintrag kann von YouTube als verdächtig markiert sein (am iPhone bleibt er
+            // im Schlüsselbund auch nach dem Löschen der App erhalten, Android startet nach Neuinstallation frisch). Einmal ohne ihn
+            // und mit frischer Besucher-Kennung wiederholen.
+            if kinds.contains(.botCheck), await endpoint.currentVisitorData() != nil {
+                try? await endpoint.resetVisitorData()
+                let left = deadline - nowMs()
+                if left >= timings.minRetryMs, let again = try? await resolveRoutes(videoId, tokens: tokens, timeoutMs: left, kinds: kinds) {
+                    cache.put(videoId, again)
+                    if !again.summary.contains(Self.noScriptMark) { warm = true }
+                    return again
+                }
+            }
             let remaining = deadline - nowMs()
             let tokenMayHelp = kinds.contains(.botCheck) || kinds.contains(.sabrOnly)
             // Nur bei Bedarf einen Token erzeugen und noch einmal versuchen.
