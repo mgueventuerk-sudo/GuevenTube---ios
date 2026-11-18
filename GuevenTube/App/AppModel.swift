@@ -78,7 +78,11 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
                 let plan = try PlaybackSourcePlanner.plan(resolved, maxHeight: settings.maxResolution?.height, audioOnly: audioOnly)
                 Task { await self.loadSponsorSegments(item.videoId) }
-                let resume: Int64 = audioOnly ? 0 : (startAtMs ?? (await env.library.resumePositionMs(item.videoId)))
+                // `await` darf nicht in einem `??`-Autoclosure stehen: darum ausgeschrieben.
+                let resume: Int64
+                if audioOnly { resume = 0 }
+                else if let startAtMs { resume = startAtMs }
+                else { resume = await env.library.resumePositionMs(item.videoId) }
                 player.setRate(settings.defaultPlaybackSpeed)
                 player.play(plan, startAtMs: resume, info: .init(title: item.title, artist: item.channelName ?? "",
                                               artworkUrl: URL(string: item.thumbnailUrl)))
