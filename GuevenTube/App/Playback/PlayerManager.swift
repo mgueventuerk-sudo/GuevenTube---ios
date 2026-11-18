@@ -56,7 +56,7 @@ final class PlayerManager: ObservableObject {
     func play(_ plan: PlaybackPlan, startAtMs: Int64 = 0, info: NowPlaying? = nil, resolveNote: String? = nil) {
         // Ohne aktive Sitzung bricht die Wiedergabe im Hintergrund und bei gesperrtem Bildschirm ab.
         try? AVAudioSession.sharedInstance().setActive(true)
-        alternative = nil
+        alternatives = []
         hlsMaxHeight = nil
         diag = resolveNote.map { [$0] } ?? []
         var first = plan
@@ -69,25 +69,31 @@ final class PlayerManager: ObservableObject {
             case .separate(_, _, let height):
                 // Zwei getrennte Ströme zu einem Medium zusammensetzen hängt auf dem iPhone mit YouTube-DASH-URLs (Ladekreis ohne Ende).
                 // HLS spielt AVPlayer nativ: zuerst HLS (mit Höhenbegrenzung), die Zusammensetzung nur als Notweg.
-                first = viaHls; alternative = original; hlsMaxHeight = height
+                first = viaHls; alternatives = [original]; hlsMaxHeight = height
             case .progressive:
-                alternative = viaHls
+                alternatives = [viaHls]
             case .hls, .audioOnly:
                 break
             }
         }
-        start(first, startAtMs: startAtMs, info: info)
+        // Schlechtere Stufen als weitere Notwege (der Videoserver lehnt manche Stufen ab, andere nicht).
+        for alt in plan.ladder {
+            var p = plan
+            p.source = alt.source; p.qualityLabel = alt.label; p.hlsFallbackUrl = nil; p.ladder = []
+            alternatives.append(p)
+        }
+        start(first, startAtMs: startAtMs, info: info, full: true)
     }
 
-    /// Zweiter Weg, falls der erste fehlschlägt oder nicht rechtzeitig startet.
-    private var alternative: PlaybackPlan?
+    /// Weitere Wege, falls der erste fehlschlägt oder nicht rechtzeitig startet (HLS/Zusammensetzen, dann schlechtere Stufen).
+    private var alternatives: [PlaybackPlan] = []
     private var hlsMaxHeight: Int?
     private var watchdog: Task<Void, Never>?
     private var startGeneration = 0
     /// Was jeder Versuch ergeben hat (Weg, HTTP-Status, Tempo, Dateikopf): erscheint bei einem Fehler im Player.
     private var diag: [String] = []
 
-    private func start(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?) {
+    private func start(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?, full: Bool = false) {
         loadTask?.cancel()
         watchdog?.cancel()
         startGeneration += 1
@@ -99,7 +105,7 @@ final class PlayerManager: ObservableObject {
         loadTask = Task { [weak self] in
             do {
                 // Vorab ein kurzer Test der Adresse: zeigt Status/Tempo/Dateikopf und spart bei 403 & Co. die Wartezeit.
-                let probes = await Self.probe(plan)
+                let probes = await Self.probe(plan, full: full)
                 guard !Task.isCancelled, let self else { return }
                 self.diag.append(contentsOf: probes.lines)
                 if let bad = probes.badStatus {
@@ -116,7 +122,7 @@ final class PlayerManager: ObservableObject {
             }
         }
         // Ein Weg, der nie fertig wird, darf nicht ewig den Ladekreis zeigen.
-        let limitSeconds: UInt64 = alternative != nil ? 12 : 45
+        let limitSeconds: UInt64 = alternatives.isEmpty ? 45 : 12
         watchdog = Task { [weak self] in
             try? await Task.sleep(nanoseconds: limitSeconds * 1_000_000_000)
             guard !Task.isCancelled, let self, self.startGeneration == generation, self.state == .loading else { return }
@@ -127,8 +133,8 @@ final class PlayerManager: ObservableObject {
 
     /// Notweg, falls vorhanden; sonst Fehler mit der echten Ursache anzeigen.
     private func fallbackOrFail(startAtMs: Int64, info: NowPlaying?, error: Error?) {
-        if let next = alternative {
-            alternative = nil
+        if !alternatives.isEmpty {
+            let next = alternatives.removeFirst()
             hlsMaxHeight = nil
             start(next, startAtMs: startAtMs, info: info)
             return
@@ -141,7 +147,7 @@ final class PlayerManager: ObservableObject {
 
     /// Testet jede Adresse des Plans mit einer kleinen Bereichsanfrage (128 KB). Lehnt der Server den Standard mit 4xx ab,
     /// werden Varianten probiert (andere Kopfzeilen, Bereich als Parameter); die erste, die klappt, wird für den Player übernommen.
-    nonisolated static func probe(_ plan: PlaybackPlan) async -> (lines: [String], badStatus: Int?, headers: [String: String]) {
+    nonisolated static func probe(_ plan: PlaybackPlan, full: Bool) async -> (lines: [String], badStatus: Int?, headers: [String: String]) {
         let targets: [(String, String)]
         switch plan.source {
         case .hls(let u): targets = [("HLS", u)]
@@ -151,13 +157,15 @@ final class PlayerManager: ObservableObject {
         }
         struct Variant { let name: String; let headers: [String: String]; let rangeParam: Bool }
         let yt = HTTPConstants.youtubeOrigin
-        let variants: [Variant] = [
-            Variant(name: "Standard", headers: [:], rangeParam: false),
+        let allVariants: [Variant] = [
             Variant(name: "+Origin/Referer", headers: ["Origin": yt, "Referer": yt + "/"], rangeParam: false),
+            Variant(name: "Standard", headers: [:], rangeParam: false),
             Variant(name: "TV-Cobalt-UA", headers: ["User-Agent": HTTPConstants.tvUserAgent, "Origin": yt, "Referer": HTTPConstants.youtubeTvReferer], rangeParam: false),
             Variant(name: "Desktop-UA", headers: ["User-Agent": HTTPConstants.desktopUserAgent, "Origin": yt, "Referer": yt + "/"], rangeParam: false),
             Variant(name: "range-Parameter", headers: [:], rangeParam: true),
         ]
+        // Alle Varianten nur beim ersten Weg; die Notwege prüfen die zwei wahrscheinlichsten (spart Wartezeit).
+        let variants = full ? allVariants : Array(allVariants.prefix(2))
         func fetch(_ url: URL, _ v: Variant) async -> (status: Int, type: String, bytes: Int, ms: Int, head: String, text: String, error: String?) {
             var u = url
             if v.rangeParam, var c = URLComponents(url: url, resolvingAgainstBaseURL: false) {
@@ -187,7 +195,7 @@ final class PlayerManager: ObservableObject {
         var lines: [String] = [], bad: Int?, chosen: [String: String] = [:]
         for (name, url) in targets {
             guard let u = URL(string: url) else { lines.append("\(name): ungültige Adresse"); continue }
-            let tag = "\(name) [\(plan.clientLabel)\(plan.throttled ? ", gedrosselt" : "")] \((u.host ?? "?").prefix(18))"
+            let tag = "\(plan.qualityLabel) \(name) \((u.host ?? "?").prefix(14))"
             var ok = false
             for (index, v) in variants.enumerated() {
                 // Nach einer funktionierenden Variante für den ersten Strom gleich diese für den zweiten zuerst, sonst der Reihe nach.
@@ -203,10 +211,11 @@ final class PlayerManager: ObservableObject {
                 // Nur bei echten Ablehnungen (4xx) Varianten durchprobieren; Netzwerkfehler und Erfolg beenden die Schleife.
                 if !(400..<500).contains(res.status) || index == variants.count - 1 { bad = res.status >= 400 ? res.status : bad; break }
             }
-            if !ok && bad == nil { bad = nil }
+            // Ist ein Strom abgelehnt, ist der Weg unbrauchbar: den zweiten nicht mehr testen.
+            if !ok && bad != nil { break }
         }
         // Query-Parameter-Namen (ohne Werte) der ersten Adresse: zeigt z. B. ein fehlendes `pot`.
-        if bad != nil, let first = targets.first, let c = URLComponents(string: first.1) {
+        if full, bad != nil, let first = targets.first, let c = URLComponents(string: first.1) {
             let items = c.queryItems ?? []
             let c0 = items.first { $0.name == "c" }?.value ?? "-"
             lines.append("Parameter: c=\(c0) " + items.map(\.name).sorted().joined(separator: ","))
@@ -232,7 +241,7 @@ final class PlayerManager: ObservableObject {
     func setRate(_ rate: Float) { player.defaultRate = rate; if state == .playing { player.rate = rate } }
 
     func stop() {
-        loadTask?.cancel(); watchdog?.cancel(); alternative = nil; hlsMaxHeight = nil
+        loadTask?.cancel(); watchdog?.cancel(); alternatives = []; hlsMaxHeight = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
         itemObservers.removeAll()

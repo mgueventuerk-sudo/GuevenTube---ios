@@ -15,6 +15,12 @@ public enum PlaybackSource: Equatable, Sendable {
     public var isAudioOnly: Bool { if case .audioOnly = self { return true } else { return false } }
 }
 
+/// Weitere spielbare Quelle, falls der Server die beste ablehnt (absteigend nach Qualität).
+public struct PlaybackAlternative: Equatable, Sendable {
+    public var source: PlaybackSource
+    public var label: String
+}
+
 public struct PlaybackPlan: Equatable, Sendable {
     public var source: PlaybackSource
     /// Anzeige, z. B. „720p“, „HLS“, „Nur Ton“.
@@ -31,6 +37,8 @@ public struct PlaybackPlan: Equatable, Sendable {
     public var clientLabel: String = ""
     /// Zusätzliche/abweichende Kopfzeilen für die Stream-Anfragen (vom Adress-Test ermittelt, wenn der Standard abgelehnt wird).
     public var extraHeaders: [String: String] = [:]
+    /// Schlechtere Stufen als Notweg: manche Stufen lehnt der Videoserver ab, andere nicht.
+    public var ladder: [PlaybackAlternative] = []
 }
 
 public struct PlaybackPlanError: Error, Equatable, Sendable { public let message: String; public init(_ m: String) { message = m } }
@@ -41,6 +49,32 @@ public enum PlaybackSourcePlanner {
     ///   - maxHeight: Obergrenze der Bildhöhe (Einstellung/Kanal/Mobilfunk); `nil` = unbegrenzt.
     ///   - audioOnly: nur Ton abspielen.
     public static func plan(_ playback: ResolvedPlayback, maxHeight: Int? = nil, audioOnly: Bool = false) throws -> PlaybackPlan {
+        var p = try basePlan(playback, maxHeight: maxHeight, audioOnly: audioOnly)
+        if !audioOnly && !p.isLive { p.ladder = alternatives(playback, excluding: p.source) }
+        return p
+    }
+
+    /// Alle weiteren Stufen (je Höhe eine, höchste zuerst, höchstens 6): getrennt mit AAC-Ton oder muxed H.264.
+    static func alternatives(_ playback: ResolvedPlayback, excluding primary: PlaybackSource) -> [PlaybackAlternative] {
+        let adaptive = playback.adaptiveFormats.filter { hasUrl($0) }
+        let muxed = playback.muxedFormats.filter { hasUrl($0) && $0.containerMimeType == "video/mp4" && $0.codecs.contains("avc1") }
+        let aac = DownloadQualityResolver.commonAudio(adaptive).max(by: { rate($0) < rate($1) })
+        var byHeight: [Int: PlaybackAlternative] = [:]
+        for v in DownloadQualityResolver.commonVideo(adaptive) where (v.height ?? 0) > 0 {
+            guard let url = v.url, let aac, let aUrl = aac.url else { continue }
+            let h = v.height ?? 0
+            let cand = PlaybackAlternative(source: .separate(videoUrl: url, audioUrl: aUrl, height: h), label: label(v))
+            if byHeight[h] == nil { byHeight[h] = cand }
+        }
+        // Muxed hat Vorrang bei gleicher Höhe: ein Strom statt zwei, kein Zusammensetzen.
+        for m in muxed {
+            guard let url = m.url else { continue }
+            byHeight[m.height ?? 0] = PlaybackAlternative(source: .progressive(url: url, height: m.height), label: label(m))
+        }
+        return byHeight.keys.sorted(by: >).compactMap { byHeight[$0] }.filter { $0.source != primary }.prefix(6).map { $0 }
+    }
+
+    static func basePlan(_ playback: ResolvedPlayback, maxHeight: Int? = nil, audioOnly: Bool = false) throws -> PlaybackPlan {
         let data = playback.playerData
         let live = data.details?.isLive ?? false
         let hls = (data.hlsManifestUrl ?? "").trimmingCharacters(in: .whitespaces)

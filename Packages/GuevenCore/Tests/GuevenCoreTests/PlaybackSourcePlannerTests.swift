@@ -55,6 +55,17 @@ final class PlaybackSourcePlannerTests: XCTestCase {
         XCTAssertNil(try PlaybackSourcePlanner.plan(playback(adaptive: [vp9(3, 1080), opus(10, 160)], hls: "https://x/h.m3u8")).hlsFallbackUrl, "HLS selbst hat keinen Notweg")
     }
 
+    func testLadderOffersLowerQualitiesHighestFirst() throws {
+        let p = playback(adaptive: [v(1, 1080), v(2, 720), v(4, 360), aac(9, 128)])
+        let plan = try PlaybackSourcePlanner.plan(p)
+        XCTAssertEqual(plan.source, .separate(videoUrl: "https://x/1", audioUrl: "https://x/9", height: 1080))
+        XCTAssertEqual(plan.ladder.map(\.source), [
+            .separate(videoUrl: "https://x/2", audioUrl: "https://x/9", height: 720),
+            .separate(videoUrl: "https://x/4", audioUrl: "https://x/9", height: 360)
+        ], "Die gewählte Stufe steht nicht noch einmal in der Leiter")
+        XCTAssertTrue(try PlaybackSourcePlanner.plan(p, audioOnly: true).ladder.isEmpty)
+    }
+
     func testLiveUsesHlsOrFails() throws {
         let plan = try PlaybackSourcePlanner.plan(playback(adaptive: [v(1, 720), aac(9, 128)], hls: "https://x/live.m3u8", live: true))
         XCTAssertEqual(plan.source, .hls(url: "https://x/live.m3u8")); XCTAssertTrue(plan.isLive)
