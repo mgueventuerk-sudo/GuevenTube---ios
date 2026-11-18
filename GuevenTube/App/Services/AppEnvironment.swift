@@ -23,6 +23,7 @@ final class AppEnvironment: @unchecked Sendable {
     let downloads: DownloadRepository
     let sponsorBlock: SponsorBlockClient
     let profileLock: ProfileLock
+    let deArrow: DeArrowClient
     let kidsGuard: KidsTimeGuard
 
     static let shared = AppEnvironment()
@@ -75,6 +76,7 @@ final class AppEnvironment: @unchecked Sendable {
         self.library = library
         let profileLock = ProfileLock(store: BackendProfileLockStore(backend: keychain, plain: values))
         self.profileLock = profileLock
+        self.deArrow = DeArrowClient(transport: transport)
         self.kidsGuard = KidsTimeGuard(usage: DefaultsKidsUsageStore(), profileLock: profileLock)
         self.settings = settings; self.sponsorBlock = sponsorBlock
         self.transport = transport; self.secrets = secrets; self.accounts = accounts; self.auth = auth; self.oauth = oauth

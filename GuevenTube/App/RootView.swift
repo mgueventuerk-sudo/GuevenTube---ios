@@ -23,6 +23,10 @@ struct RootView: View {
         .environmentObject(music)
         .environmentObject(kids)
         .overlay { if let b = kids.block, !app.showPlayer { KidsBlockView(reason: b.reason).environmentObject(kids) } }
+        .sheet(item: Binding(get: { app.showPlayer ? nil : app.channelRoute }, set: { app.channelRoute = $0 })) { c in
+            NavigationStack { ChannelView(channel: c).toolbar { ToolbarItem(placement: .topBarLeading) { Button("Schließen") { app.channelRoute = nil } } } }
+                .environmentObject(app)
+        }
         .task { kids.start(player: app.player); await kids.refreshPin() }
         .fullScreenCover(isPresented: $app.showPlayer) { PlayerScreen(player: app.player).environmentObject(app)
                 .overlay { if let b = kids.block { KidsBlockView(reason: b.reason).environmentObject(kids) } } }

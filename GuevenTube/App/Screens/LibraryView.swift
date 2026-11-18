@@ -11,11 +11,13 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section { NavigationLink("Meine Playlists") { PlaylistsView() } }
+                Section {
+                    NavigationLink("Meine Playlists") { PlaylistsView() }
+                    NavigationLink("Abos") { SubscriptionsView() }
+                }
                 if signedIn {
                     Section("YouTube-Konto") {
                         NavigationLink("Verlauf") { HistoryView() }
-                        NavigationLink("Abos") { SubscriptionsView() }
                     }
                 }
                 if continueWatching.isEmpty && watchLater.isEmpty { Text("Noch nichts gespeichert.").foregroundStyle(.secondary) }

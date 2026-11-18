@@ -37,7 +37,9 @@ struct PlayerScreen: View {
             if let v = app.current {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(v.title).font(.headline)
-                    Text(v.channelName ?? "").font(.subheadline).foregroundStyle(.secondary)
+                    if let id = v.channelId, let name = v.channelName {
+                        Button(name) { app.channelRoute = ChannelRef(channelId: id, name: name) }.font(.subheadline)
+                    } else { Text(v.channelName ?? "").font(.subheadline).foregroundStyle(.secondary) }
                     Button("Später ansehen") { Task { await AppEnvironment.shared.library.addToWatchLater(v) } }
                     AddToPlaylistMenu(video: v)
                     Menu("Herunterladen") {
@@ -54,6 +56,10 @@ struct PlayerScreen: View {
         }
         .overlay(alignment: .topTrailing) {
             Button { app.closePlayer() } label: { Image(systemName: "xmark.circle.fill").font(.title).padding() }
+        }
+        .sheet(item: Binding(get: { app.showPlayer ? app.channelRoute : nil }, set: { app.channelRoute = $0 })) { c in
+            NavigationStack { ChannelView(channel: c).toolbar { ToolbarItem(placement: .topBarLeading) { Button("Schließen") { app.channelRoute = nil } } } }
+                .environmentObject(app)
         }
     }
 

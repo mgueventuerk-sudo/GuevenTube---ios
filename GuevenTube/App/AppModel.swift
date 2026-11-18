@@ -10,6 +10,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var current: VideoItem?
     @Published private(set) var playbackError: String?
     @Published var showPlayer = false
+    /// Kanalseite als Sheet; im Player und außerhalb davon je ein eigenes Sheet (zwei Sheets gleichzeitig gehen nicht).
+    @Published var channelRoute: ChannelRef?
     @Published private(set) var skipPrompt: SponsorSegment?
     private var skipPlanner: SponsorSkipPlanner?
     private var lastSavedAtMs: Int64 = 0

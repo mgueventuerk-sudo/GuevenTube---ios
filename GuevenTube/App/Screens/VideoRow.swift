@@ -2,10 +2,20 @@ import SwiftUI
 import GuevenCore
 
 struct VideoRow: View {
+    @EnvironmentObject private var app: AppModel
     let item: VideoItem
+    @State private var branding: Branding = .original
     var body: some View {
+        row.contextMenu {
+            if let id = item.channelId, let name = item.channelName {
+                Button("Kanal „\(name)“ öffnen") { app.channelRoute = ChannelRef(channelId: id, name: name) }
+            }
+        }
+    }
+
+    private var row: some View {
         HStack(alignment: .top, spacing: 12) {
-            AsyncImage(url: URL(string: item.thumbnailUrl)) { $0.resizable().aspectRatio(16 / 9, contentMode: .fill) }
+            AsyncImage(url: URL(string: branding.thumbnailUrl ?? item.thumbnailUrl)) { $0.resizable().aspectRatio(16 / 9, contentMode: .fill) }
                 placeholder: { Color.gray.opacity(0.2) }
                 .frame(width: 140, height: 79).clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(alignment: .bottomTrailing) {
@@ -15,13 +25,18 @@ struct VideoRow: View {
                         .clipShape(RoundedRectangle(cornerRadius: 4)).padding(4) }
                 }
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.title).font(.subheadline).lineLimit(2)
+                Text(branding.title ?? item.title).font(.subheadline).lineLimit(2)
                 Text([item.channelName, item.viewCountText, item.publishedText].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
+        .task(id: item.videoId) {
+            // Nur mit eingeschaltetem DeArrow (Video-IDs gehen dann an den DeArrow-Dienst); Fehler → Original.
+            guard await AppEnvironment.shared.settings.current().deArrowEnabled, !item.isShort else { branding = .original; return }
+            branding = (try? await AppEnvironment.shared.deArrow.branding(item.videoId)) ?? .original
+        }
     }
 
     static func format(_ seconds: Int64) -> String {

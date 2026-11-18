@@ -52,34 +52,46 @@ struct HistoryView: View {
 struct SubscriptionsView: View {
     @EnvironmentObject var app: AppModel
     @State private var channels: [SubscribedChannel] = []
+    @State private var localChannels: [LocalSubscription] = []
     @State private var loading = false
     @State private var error: String?
 
     var body: some View {
         List {
+            if !localChannels.isEmpty {
+                Section("Auf diesem Gerät") {
+                    ForEach(localChannels, id: \.channelId) { c in
+                        Button { app.channelRoute = ChannelRef(channelId: c.channelId, name: c.name, avatarUrl: c.avatarUrl) } label: { Text(c.name) }.buttonStyle(.plain)
+                            .swipeActions { Button("Entfernen", role: .destructive) { Task { await AppEnvironment.shared.library.unsubscribe(c.channelId); await loadLocal() } } }
+                    }
+                }
+            }
             if let error { Text(error).foregroundStyle(.red) }
             ForEach(channels, id: \.channelId) { c in
-                HStack(spacing: 12) {
+                Button { app.channelRoute = ChannelRef(channelId: c.channelId, name: c.name, avatarUrl: c.avatarUrl) } label: { HStack(spacing: 12) {
                     AsyncImage(url: c.avatarUrl.flatMap(URL.init(string:))) { $0.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.2) }
                         .frame(width: 40, height: 40).clipShape(Circle())
                     Text(c.name)
                     Spacer()
                     if c.hasNewContent { Circle().fill(.blue).frame(width: 8, height: 8) }
-                }
+                } }.buttonStyle(.plain)
             }
         }
         .listStyle(.plain)
         .overlay { if loading && channels.isEmpty { ProgressView() } }
         .navigationTitle("Abos")
         .refreshable { await load() }
-        .task { if channels.isEmpty { await load() } }
+        .task { await loadLocal(); if channels.isEmpty { await load() } }
     }
+
+    private func loadLocal() async { localChannels = await AppEnvironment.shared.library.subscriptions() }
 
     private func load() async {
         loading = true; defer { loading = false }
+        guard await app.env.innerTube.hasAccount() else { error = nil; return }
         do {
             channels = InnerTubeParser.parseSubscriptionChannels(try await app.env.innerTube.browse(browseId: InnerTubeService.browseSubscriptions))
-            error = channels.isEmpty ? "Keine Abos gefunden (Anmeldung nötig?)." : nil
+            error = channels.isEmpty && localChannels.isEmpty ? "Keine Abos gefunden." : nil
         } catch { self.error = String(describing: error) }
     }
 }
