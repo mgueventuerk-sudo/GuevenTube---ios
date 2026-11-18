@@ -193,3 +193,67 @@ public enum JSONParser {
         }
     }
 }
+
+// MARK: Aufbau und Ausgabe (für Anfrage-Bodies)
+
+extension JSON: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral, ExpressibleByBooleanLiteral {
+    public init(stringLiteral value: String) { self = .string(value) }
+    public init(integerLiteral value: Int) { self = .number(String(value)) }
+    public init(booleanLiteral value: Bool) { self = .bool(value) }
+}
+
+public extension JSONObject {
+    init(_ pairs: [(String, JSON)]) {
+        self.init()
+        for (k, v) in pairs { set(k, v) }
+    }
+}
+
+public extension JSON {
+    static func obj(_ pairs: [(String, JSON)]) -> JSON { .object(JSONObject(pairs)) }
+
+    /// Kompakte JSON-Ausgabe in Einfügereihenfolge.
+    func serialized() -> String {
+        var out = ""
+        write(to: &out)
+        return out
+    }
+
+    private func write(to out: inout String) {
+        switch self {
+        case .null: out += "null"
+        case .bool(let b): out += b ? "true" : "false"
+        case .number(let n): out += n
+        case .string(let s): Self.writeString(s, to: &out)
+        case .array(let a):
+            out += "["
+            for (i, v) in a.enumerated() { if i > 0 { out += "," }; v.write(to: &out) }
+            out += "]"
+        case .object(let o):
+            out += "{"
+            for (i, e) in o.entries.enumerated() {
+                if i > 0 { out += "," }
+                Self.writeString(e.key, to: &out)
+                out += ":"
+                e.value.write(to: &out)
+            }
+            out += "}"
+        }
+    }
+
+    private static func writeString(_ s: String, to out: inout String) {
+        out += "\""
+        for u in s.unicodeScalars {
+            switch u {
+            case "\"": out += "\\\""
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            default:
+                if u.value < 0x20 { out += String(format: "\\u%04x", u.value) } else { out.unicodeScalars.append(u) }
+            }
+        }
+        out += "\""
+    }
+}
