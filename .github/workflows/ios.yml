@@ -8,8 +8,18 @@ jobs:
       - run: swift test --package-path Packages/GuevenCore
       - run: brew install xcodegen
       - run: xcodegen generate
+      - name: iPhone-Simulator suchen
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available iPhone | grep -m1 -oE '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' || true)
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Gefundener Simulator: ${UDID:-keiner}"
       - name: Tests
-        run: xcodebuild test -project GuevenTube.xcodeproj -scheme GuevenTube -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGNING_ALLOWED=NO
+        if: steps.sim.outputs.udid != ''
+        run: xcodebuild test -project GuevenTube.xcodeproj -scheme GuevenTube -destination "id=${{ steps.sim.outputs.udid }}" CODE_SIGNING_ALLOWED=NO
+      - name: Hinweis ohne Simulator
+        if: steps.sim.outputs.udid == ''
+        run: echo "::warning::Kein iPhone-Simulator auf dem Runner. App-Tests uebersprungen, Core-Tests liefen oben."
       - name: Unsigniertes IPA (zum Sideloading)
         run: |
           xcodebuild archive -project GuevenTube.xcodeproj -scheme GuevenTube -configuration Release -sdk iphoneos -archivePath build/GT.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
