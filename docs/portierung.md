@@ -121,4 +121,4 @@ Einstellungen (`SettingsView` über `SettingsStore`: Auflösungslimit, Autoplay,
 
 ## Etappe 21 – Kindermodus (App-Schicht, nur Syntaxprüfung)
 `KidsModel` taktet `KidsTimeGuard` (bereits getestet, Core) alle 15 s: zählt Wiedergabezeit, pausiert bei Tageslimit/Schlafenszeit, `KidsBlockView` sperrt Bildschirm und Player-Cover bis PIN-Eingabe (30 min frei). Einstellungen: Kindermodus lässt sich nur mit gesetzter PIN einschalten; solange er an ist, sind Limit, Schlafenszeit und Ausschalten PIN-geschützt (`ProfileLock`, PBKDF2, Sperre nach 5 Fehlversuchen). Nutzung in `UserDefaults` (`DefaultsKidsUsageStore`).
-**Grenzen [sicher]:** Sperre greift bis zu 15 s verzögert; Suche/Startseite werden nicht auf Kinderinhalte gefiltert (Android hat dort weitere Filter, nicht portiert); ein Löschen/Neuinstallieren der App setzt PIN und Nutzung zurück.
+**Grenzen [sicher]:** Sperre greift bis zu 15 s verzögert; Suche/Startseite werden nicht auf Kinderinhalte gefiltert (ob Android das tut, ist nicht geprüft; `ui/kids/` dort ist nicht portiert); ein Löschen/Neuinstallieren der App setzt PIN und Nutzung zurück.
