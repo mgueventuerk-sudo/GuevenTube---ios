@@ -38,6 +38,7 @@ struct PlayerScreen: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(v.title).font(.headline)
                     Text(v.channelName ?? "").font(.subheadline).foregroundStyle(.secondary)
+                    Button("Später ansehen") { Task { await AppEnvironment.shared.library.addToWatchLater(v) } }
                     Menu("Herunterladen") {
                         ForEach([DownloadQuality.audioOnly, .hd, .fullHd], id: \.self) { q in
                             Button(q.label) { downloads.enqueue(v, quality: q) }

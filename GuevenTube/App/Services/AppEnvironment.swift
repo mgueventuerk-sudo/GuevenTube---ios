@@ -17,6 +17,7 @@ final class AppEnvironment: @unchecked Sendable {
     let resolver: StreamResolver
     let values: StringValueStore
     let settings: SettingsStore
+    let library: LocalLibrary
     let downloadStore: DownloadStore
     let downloadManager: DownloadManager
     let downloads: DownloadRepository
@@ -68,6 +69,8 @@ final class AppEnvironment: @unchecked Sendable {
             try? FileManager.default.removeItem(at: DownloadManager.downloadsDirectory.appendingPathComponent(name))
         })
         self.downloadStore = downloadStore; self.downloadManager = downloadManager; self.downloads = downloads
+        let library = LocalLibrary(file: dir(support, "library").appendingPathComponent("library.json"))
+        self.library = library
         self.settings = settings; self.sponsorBlock = sponsorBlock
         self.transport = transport; self.secrets = secrets; self.accounts = accounts; self.auth = auth; self.oauth = oauth
         self.config = config; self.innerTube = innerTube; self.playerScripts = scripts; self.solver = solver
