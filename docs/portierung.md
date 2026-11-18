@@ -47,3 +47,6 @@ Jede Etappe: Tests gegen aufgezeichnete JSON-Antworten (aus Android-Testdaten ü
 - `SponsorBlockClient` (k-Anonymität über SHA-256-Präfix, eigene SHA-256-Implementierung gegen `sha256sum` geprüft, 30-min-Cache, Fallback auf veraltete Segmente, Höhepunkt). Abweichung von Android: Netzfehler werden bei `highlight` nicht als „kein Höhepunkt“ gemerkt.
 - `DownloadQualityResolver` (H.264/AAC-MP4 bevorzugt).
 - Offen in Etappe 4: DeArrow, Einstellungen/Feature-Flags, Persistenz (SwiftData), Abos, Kinder-Modus, Statistik.
+
+## Etappe 4e – DeArrow, Transkript, Abo-Reihenfolge (fertig)
+`DeArrowClient` (Abweichung: Netzfehler werden nicht gemerkt), `Transcript`/`TranscriptSummarizer` (Kurzfassung und Kapitel lokal), `SubscriptionSort`/`SubscriptionDatesStore`. **Bewusst nicht portiert:** `DashManifestGenerator` (AVPlayer spielt kein DASH; für getrennte Bild-/Tonströme braucht iOS einen eigenen Weg: `AVMutableComposition` oder lokal erzeugtes HLS – Entscheidung in der App-Schicht).
