@@ -18,6 +18,8 @@ final class AppModel: ObservableObject {
     private var queue: [VideoItem] = []
     @Published private(set) var queueRemaining = 0
     private var endObserver: AnyCancellable?
+    /// Autoplay nur nach einzeln gestarteten Videos: nicht nach Musik (eigene Warteschlange) und nicht nach Playlists.
+    private var autoplayAllowed = false
 
     init() {
         player.onPosition = { [weak self] ms in self?.handleSkip(ms) }
@@ -26,15 +28,31 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Empfohlenes Folgevideo (erstes aus `next`, ohne bereits Gesehenes im Verlauf); scheitert still – dann bleibt das Video am Ende stehen.
+    private func autoplayNext() {
+        guard autoplayAllowed, let current else { return }
+        let id = current.videoId
+        Task { [weak self] in
+            guard let self, await env.settings.current().autoplay else { return }
+            guard let json = try? await env.innerTube.next(videoId: id) else { return }
+            let related = InnerTubeParser.parseWatchNext(json, videoId: id).related
+            let watched = await env.library.progressMap()
+            guard let next = related.first(where: { watched[$0.videoId] == nil && !$0.isLive }),
+                  self.current?.videoId == id, self.player.state == .ended else { return }
+            play(next)
+        }
+    }
+
     /// Spielt [items] nacheinander; jedes andere `play` beendet die Reihenfolge.
     func playQueue(_ items: [VideoItem]) {
         guard let first = items.first else { return }
         play(first)
         queue = Array(items.dropFirst()); queueRemaining = queue.count
+        autoplayAllowed = false
     }
 
     func playNextInQueue() {
-        guard !queue.isEmpty else { return }
+        guard !queue.isEmpty else { return autoplayNext() }
         let next = queue.removeFirst(); queueRemaining = queue.count
         play(next, keepQueue: true)
     }
@@ -42,6 +60,7 @@ final class AppModel: ObservableObject {
     func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true, keepQueue: Bool = false) {
         task?.cancel()
         if !keepQueue { queue = []; queueRemaining = 0 }
+        autoplayAllowed = !audioOnly && !keepQueue
         current = item
         skipPlanner = nil; skipPrompt = nil
         playbackError = nil
