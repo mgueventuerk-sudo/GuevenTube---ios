@@ -58,6 +58,7 @@ final class PlayerManager: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(true)
         alternative = nil
         hlsMaxHeight = nil
+        diag = []
         var first = plan
         if let hls = plan.hlsFallbackUrl, !plan.isLive {
             var viaHls = plan
@@ -83,6 +84,8 @@ final class PlayerManager: ObservableObject {
     private var hlsMaxHeight: Int?
     private var watchdog: Task<Void, Never>?
     private var startGeneration = 0
+    /// Was jeder Versuch ergeben hat (Weg, HTTP-Status, Tempo, Dateikopf): erscheint bei einem Fehler im Player.
+    private var diag: [String] = []
 
     private func start(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?) {
         loadTask?.cancel()
@@ -95,8 +98,15 @@ final class PlayerManager: ObservableObject {
         positionMs = startAtMs
         loadTask = Task { [weak self] in
             do {
-                let item = try await Self.makeItem(for: plan)
+                // Vorab ein kurzer Test der Adresse: zeigt Status/Tempo/Dateikopf und spart bei 403 & Co. die Wartezeit.
+                let probes = await Self.probe(plan)
                 guard !Task.isCancelled, let self else { return }
+                self.diag.append(contentsOf: probes.lines)
+                if let bad = probes.badStatus {
+                    throw NSError(domain: "GuevenTube", code: bad, userInfo: [NSLocalizedDescriptionKey: "Server verweigert den Strom (HTTP \(bad))"])
+                }
+                let item = try await Self.makeItem(for: plan)
+                guard !Task.isCancelled else { return }
                 self.attach(item, startAtMs: startAtMs)
             } catch is CancellationError {
             } catch {
@@ -122,8 +132,47 @@ final class PlayerManager: ObservableObject {
             return
         }
         let ns = error as NSError?
-        let detail = ns.map { "\($0.localizedDescription) (\($0.domain) \($0.code))" } ?? "Wiedergabe fehlgeschlagen"
-        state = .failed(detail)
+        var detail = ns.map { "\($0.localizedDescription) (\($0.domain) \($0.code))" } ?? "Wiedergabe fehlgeschlagen"
+        if let u = ns?.userInfo[NSUnderlyingErrorKey] as? NSError { detail += " ← \(u.domain) \(u.code)" }
+        state = .failed(([detail] + diag).joined(separator: "\n"))
+    }
+
+    /// Testet jede Adresse des Plans mit einer kleinen Bereichsanfrage (128 KB) und beschreibt das Ergebnis ohne Geheimnisse.
+    nonisolated static func probe(_ plan: PlaybackPlan) async -> (lines: [String], badStatus: Int?) {
+        let targets: [(String, String)]
+        switch plan.source {
+        case .hls(let u): targets = [("HLS", u)]
+        case .progressive(let u, _): targets = [("Einzelstrom", u)]
+        case .audioOnly(let u): targets = [("Ton", u)]
+        case .separate(let v, let a, _): targets = [("Bild", v), ("Ton", a)]
+        }
+        var lines: [String] = [], bad: Int?
+        for (name, url) in targets {
+            guard let u = URL(string: url) else { lines.append("\(name): ungültige Adresse"); continue }
+            var r = URLRequest(url: u); r.timeoutInterval = 10
+            r.setValue(plan.userAgent, forHTTPHeaderField: "User-Agent")
+            r.setValue("bytes=0-131071", forHTTPHeaderField: "Range")
+            let t0 = Date()
+            let prefix = "\(name) [\(plan.clientLabel)\(plan.throttled ? ", gedrosselt" : "")] \(u.host ?? "?")"
+            do {
+                let (data, resp) = try await URLSessionTransport.cookieFreeSession.data(for: r)
+                let h = resp as? HTTPURLResponse
+                let status = h?.statusCode ?? 0
+                let type = h?.value(forHTTPHeaderField: "Content-Type") ?? "?"
+                let ms = max(Int(Date().timeIntervalSince(t0) * 1000), 1)
+                let head = data.prefix(8).map { String(format: "%02x", $0) }.joined()
+                var text = ""
+                if type.contains("text") || type.contains("json") || type.contains("mpegurl") || type.contains("xml") {
+                    text = " „" + String(decoding: data.prefix(60), as: UTF8.self).replacingOccurrences(of: "\n", with: " ") + "“"
+                }
+                lines.append("\(prefix): HTTP \(status) \(type) \(data.count)B in \(ms)ms (\(data.count / ms) kB/s) [\(head)]\(text)")
+                if status >= 400 { bad = status }
+            } catch {
+                let ns = error as NSError
+                lines.append("\(prefix): \(ns.domain) \(ns.code) nach \(Int(Date().timeIntervalSince(t0) * 1000))ms")
+            }
+        }
+        return (lines, bad)
     }
 
     func resume() { player.play(); if state == .paused || state == .ready { state = .playing } }

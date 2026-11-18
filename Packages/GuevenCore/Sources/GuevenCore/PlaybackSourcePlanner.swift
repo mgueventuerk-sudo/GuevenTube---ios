@@ -27,6 +27,8 @@ public struct PlaybackPlan: Equatable, Sendable {
     /// HLS-Adresse als Notweg: Scheitert das Zusammensetzen von Bild und Ton oder das Laden eines Einzelstroms auf dem Gerät,
     /// spielt der Player stattdessen den HLS-Strom (AVPlayer kann ihn nativ).
     public var hlsFallbackUrl: String? = nil
+    /// Welcher Abspielweg die Adressen geliefert hat (für die Fehleranzeige), z. B. „TV (Samsung) · Konto“.
+    public var clientLabel: String = ""
 }
 
 public struct PlaybackPlanError: Error, Equatable, Sendable { public let message: String; public init(_ m: String) { message = m } }
@@ -42,6 +44,7 @@ public enum PlaybackSourcePlanner {
         let hls = (data.hlsManifestUrl ?? "").trimmingCharacters(in: .whitespaces)
         func make(_ source: PlaybackSource, _ label: String) -> PlaybackPlan {
             var plan = PlaybackPlan(source: source, qualityLabel: label, userAgent: playback.userAgent, throttled: playback.throttlingUnsolved, isLive: live)
+            plan.clientLabel = playback.clientLabel
             if case .hls = source {} else if !hls.isEmpty { plan.hlsFallbackUrl = hls }
             return plan
         }
