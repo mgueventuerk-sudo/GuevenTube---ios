@@ -18,6 +18,7 @@ struct PlayerScreen: View {
     @EnvironmentObject var app: AppModel
     @ObservedObject var player: PlayerManager
     @StateObject private var downloads = DownloadsModel()
+    @State private var showTranscript = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,6 +43,7 @@ struct PlayerScreen: View {
                     } else { Text(v.channelName ?? "").font(.subheadline).foregroundStyle(.secondary) }
                     Button("Später ansehen") { Task { await AppEnvironment.shared.library.addToWatchLater(v) } }
                     AddToPlaylistMenu(video: v)
+                    if !app.captions.isEmpty { Button("Transkript") { showTranscript = true }.sheet(isPresented: $showTranscript) { TranscriptView().environmentObject(app) } }
                     Menu("Herunterladen") {
                         ForEach([DownloadQuality.audioOnly, .hd, .fullHd], id: \.self) { q in
                             Button(q.label) { downloads.enqueue(v, quality: q) }

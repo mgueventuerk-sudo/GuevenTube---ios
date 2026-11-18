@@ -13,6 +13,8 @@ final class AppModel: ObservableObject {
     /// Kanalseite als Sheet; im Player und außerhalb davon je ein eigenes Sheet (zwei Sheets gleichzeitig gehen nicht).
     @Published var channelRoute: ChannelRef?
     @Published private(set) var skipPrompt: SponsorSegment?
+    /// Untertitelspuren des laufenden Videos (für das Transkript).
+    @Published private(set) var captions: [CaptionTrack] = []
     private var skipPlanner: SponsorSkipPlanner?
     private var lastSavedAtMs: Int64 = 0
     private var task: Task<Void, Never>?
@@ -64,7 +66,7 @@ final class AppModel: ObservableObject {
         if !keepQueue { queue = []; queueRemaining = 0 }
         autoplayAllowed = !audioOnly && !keepQueue
         current = item
-        skipPlanner = nil; skipPrompt = nil
+        skipPlanner = nil; skipPrompt = nil; captions = []
         playbackError = nil
         self.showPlayer = showPlayer
         task = Task { [weak self] in
@@ -72,6 +74,7 @@ final class AppModel: ObservableObject {
             do {
                 let settings = await env.settings.current()
                 let resolved = try await env.resolver.resolve(item.videoId)
+                captions = resolved.playerData.captions
                 try Task.checkCancellation()
                 let plan = try PlaybackSourcePlanner.plan(resolved, maxHeight: settings.maxResolution?.height, audioOnly: audioOnly)
                 Task { await self.loadSponsorSegments(item.videoId) }
