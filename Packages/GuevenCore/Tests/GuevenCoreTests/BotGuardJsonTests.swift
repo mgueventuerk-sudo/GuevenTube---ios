@@ -7,7 +7,7 @@ final class BotGuardJsonTests: XCTestCase {
     }
 
     func testChallengeInPlainFormIsReshaped() throws {
-        let raw = #"[["msg",["script();",null,"//url"],null,"hash","PROGRAM","globalVm",null,"blob"]]"#
+        let raw = #"[["msg",["script();"],["//url"],"hash","PROGRAM","globalVm",null,"blob"]]"#
         let out = try BotGuardJson.parseChallengeData(raw)
         let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(out.utf8)) as? [String: Any])
         XCTAssertEqual(obj["program"] as? String, "PROGRAM")

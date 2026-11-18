@@ -31,6 +31,7 @@ final class AppEnvironment: @unchecked Sendable {
     static let shared = AppEnvironment()
 
     private init() {
+        FreshInstall.wipeKeychainIfNeeded()
         let fm = FileManager.default
         let support = (try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
             ?? fm.temporaryDirectory
