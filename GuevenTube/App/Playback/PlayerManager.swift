@@ -53,12 +53,12 @@ final class PlayerManager: ObservableObject {
 
     // MARK: Steuerung
 
-    func play(_ plan: PlaybackPlan, startAtMs: Int64 = 0, info: NowPlaying? = nil) {
+    func play(_ plan: PlaybackPlan, startAtMs: Int64 = 0, info: NowPlaying? = nil, resolveNote: String? = nil) {
         // Ohne aktive Sitzung bricht die Wiedergabe im Hintergrund und bei gesperrtem Bildschirm ab.
         try? AVAudioSession.sharedInstance().setActive(true)
         alternative = nil
         hlsMaxHeight = nil
-        diag = []
+        diag = resolveNote.map { [$0] } ?? []
         var first = plan
         if let hls = plan.hlsFallbackUrl, !plan.isLive {
             var viaHls = plan
@@ -105,7 +105,9 @@ final class PlayerManager: ObservableObject {
                 if let bad = probes.badStatus {
                     throw NSError(domain: "GuevenTube", code: bad, userInfo: [NSLocalizedDescriptionKey: "Server verweigert den Strom (HTTP \(bad))"])
                 }
-                let item = try await Self.makeItem(for: plan)
+                var usable = plan
+                if !probes.headers.isEmpty { usable.extraHeaders = probes.headers }
+                let item = try await Self.makeItem(for: usable)
                 guard !Task.isCancelled else { return }
                 self.attach(item, startAtMs: startAtMs)
             } catch is CancellationError {
@@ -137,8 +139,9 @@ final class PlayerManager: ObservableObject {
         state = .failed(([detail] + diag).joined(separator: "\n"))
     }
 
-    /// Testet jede Adresse des Plans mit einer kleinen Bereichsanfrage (128 KB) und beschreibt das Ergebnis ohne Geheimnisse.
-    nonisolated static func probe(_ plan: PlaybackPlan) async -> (lines: [String], badStatus: Int?) {
+    /// Testet jede Adresse des Plans mit einer kleinen Bereichsanfrage (128 KB). Lehnt der Server den Standard mit 4xx ab,
+    /// werden Varianten probiert (andere Kopfzeilen, Bereich als Parameter); die erste, die klappt, wird für den Player übernommen.
+    nonisolated static func probe(_ plan: PlaybackPlan) async -> (lines: [String], badStatus: Int?, headers: [String: String]) {
         let targets: [(String, String)]
         switch plan.source {
         case .hls(let u): targets = [("HLS", u)]
@@ -146,33 +149,69 @@ final class PlayerManager: ObservableObject {
         case .audioOnly(let u): targets = [("Ton", u)]
         case .separate(let v, let a, _): targets = [("Bild", v), ("Ton", a)]
         }
-        var lines: [String] = [], bad: Int?
-        for (name, url) in targets {
-            guard let u = URL(string: url) else { lines.append("\(name): ungültige Adresse"); continue }
+        struct Variant { let name: String; let headers: [String: String]; let rangeParam: Bool }
+        let yt = HTTPConstants.youtubeOrigin
+        let variants: [Variant] = [
+            Variant(name: "Standard", headers: [:], rangeParam: false),
+            Variant(name: "+Origin/Referer", headers: ["Origin": yt, "Referer": yt + "/"], rangeParam: false),
+            Variant(name: "TV-Cobalt-UA", headers: ["User-Agent": HTTPConstants.tvUserAgent, "Origin": yt, "Referer": HTTPConstants.youtubeTvReferer], rangeParam: false),
+            Variant(name: "Desktop-UA", headers: ["User-Agent": HTTPConstants.desktopUserAgent, "Origin": yt, "Referer": yt + "/"], rangeParam: false),
+            Variant(name: "range-Parameter", headers: [:], rangeParam: true),
+        ]
+        func fetch(_ url: URL, _ v: Variant) async -> (status: Int, type: String, bytes: Int, ms: Int, head: String, text: String, error: String?) {
+            var u = url
+            if v.rangeParam, var c = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                c.queryItems = (c.queryItems ?? []) + [URLQueryItem(name: "range", value: "0-131071")]
+                u = c.url ?? url
+            }
             var r = URLRequest(url: u); r.timeoutInterval = 10
             r.setValue(plan.userAgent, forHTTPHeaderField: "User-Agent")
-            r.setValue("bytes=0-131071", forHTTPHeaderField: "Range")
+            if !v.rangeParam { r.setValue("bytes=0-131071", forHTTPHeaderField: "Range") }
+            for (k, val) in v.headers { r.setValue(val, forHTTPHeaderField: k) }
             let t0 = Date()
-            let prefix = "\(name) [\(plan.clientLabel)\(plan.throttled ? ", gedrosselt" : "")] \(u.host ?? "?")"
             do {
                 let (data, resp) = try await URLSessionTransport.cookieFreeSession.data(for: r)
                 let h = resp as? HTTPURLResponse
-                let status = h?.statusCode ?? 0
                 let type = h?.value(forHTTPHeaderField: "Content-Type") ?? "?"
                 let ms = max(Int(Date().timeIntervalSince(t0) * 1000), 1)
-                let head = data.prefix(8).map { String(format: "%02x", $0) }.joined()
                 var text = ""
                 if type.contains("text") || type.contains("json") || type.contains("mpegurl") || type.contains("xml") {
-                    text = " „" + String(decoding: data.prefix(60), as: UTF8.self).replacingOccurrences(of: "\n", with: " ") + "“"
+                    text = " „" + String(decoding: data.prefix(50), as: UTF8.self).replacingOccurrences(of: "\n", with: " ") + "“"
                 }
-                lines.append("\(prefix): HTTP \(status) \(type) \(data.count)B in \(ms)ms (\(data.count / ms) kB/s) [\(head)]\(text)")
-                if status >= 400 { bad = status }
+                return (h?.statusCode ?? 0, type, data.count, ms, data.prefix(8).map { String(format: "%02x", $0) }.joined(), text, nil)
             } catch {
                 let ns = error as NSError
-                lines.append("\(prefix): \(ns.domain) \(ns.code) nach \(Int(Date().timeIntervalSince(t0) * 1000))ms")
+                return (0, "", 0, Int(Date().timeIntervalSince(t0) * 1000), "", "", "\(ns.domain) \(ns.code)")
             }
         }
-        return (lines, bad)
+        var lines: [String] = [], bad: Int?, chosen: [String: String] = [:]
+        for (name, url) in targets {
+            guard let u = URL(string: url) else { lines.append("\(name): ungültige Adresse"); continue }
+            let tag = "\(name) [\(plan.clientLabel)\(plan.throttled ? ", gedrosselt" : "")] \((u.host ?? "?").prefix(18))"
+            var ok = false
+            for (index, v) in variants.enumerated() {
+                // Nach einer funktionierenden Variante für den ersten Strom gleich diese für den zweiten zuerst, sonst der Reihe nach.
+                let res = await fetch(u, v)
+                let good = (200..<300).contains(res.status)
+                if let e = res.error { lines.append("\(tag) \(v.name): \(e) \(res.ms)ms") }
+                else { lines.append("\(tag) \(v.name): HTTP \(res.status) \(res.type) \(res.bytes)B \(res.ms)ms (\(res.bytes / res.ms) kB/s) [\(res.head)]\(res.text)") }
+                if good {
+                    ok = true
+                    if !v.rangeParam { for (k, val) in v.headers { chosen[k] = val } }
+                    break
+                }
+                // Nur bei echten Ablehnungen (4xx) Varianten durchprobieren; Netzwerkfehler und Erfolg beenden die Schleife.
+                if !(400..<500).contains(res.status) || index == variants.count - 1 { bad = res.status >= 400 ? res.status : bad; break }
+            }
+            if !ok && bad == nil { bad = nil }
+        }
+        // Query-Parameter-Namen (ohne Werte) der ersten Adresse: zeigt z. B. ein fehlendes `pot`.
+        if bad != nil, let first = targets.first, let c = URLComponents(string: first.1) {
+            let items = c.queryItems ?? []
+            let c0 = items.first { $0.name == "c" }?.value ?? "-"
+            lines.append("Parameter: c=\(c0) " + items.map(\.name).sorted().joined(separator: ","))
+        }
+        return (lines, bad, chosen)
     }
 
     func resume() { player.play(); if state == .paused || state == .ready { state = .playing } }
@@ -204,7 +243,9 @@ final class PlayerManager: ObservableObject {
     // MARK: Item-Bau
 
     nonisolated static func headers(for plan: PlaybackPlan) -> [String: String] {
-        ["User-Agent": plan.userAgent]
+        var h = ["User-Agent": plan.userAgent]
+        for (k, v) in plan.extraHeaders { h[k] = v }
+        return h
     }
 
     /// `AVURLAssetHTTPHeaderFieldsKey` ist nicht dokumentiert, wird aber seit Jahren von Apps genutzt (wahrscheinlich stabil).

@@ -29,6 +29,8 @@ public struct PlaybackPlan: Equatable, Sendable {
     public var hlsFallbackUrl: String? = nil
     /// Welcher Abspielweg die Adressen geliefert hat (für die Fehleranzeige), z. B. „TV (Samsung) · Konto“.
     public var clientLabel: String = ""
+    /// Zusätzliche/abweichende Kopfzeilen für die Stream-Anfragen (vom Adress-Test ermittelt, wenn der Standard abgelehnt wird).
+    public var extraHeaders: [String: String] = [:]
 }
 
 public struct PlaybackPlanError: Error, Equatable, Sendable { public let message: String; public init(_ m: String) { message = m } }

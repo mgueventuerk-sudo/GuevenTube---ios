@@ -28,7 +28,9 @@ struct PlayerScreen: View {
                 Color.black
                 SystemPlayer(player: player.player)
                 if case .loading = player.state, app.playbackError == nil { ProgressView().tint(.white) }
-                if let msg = errorText { Text(msg).foregroundStyle(.white).padding().multilineTextAlignment(.center) }
+                if let msg = errorText {
+                    ScrollView { Text(msg).font(.system(.caption2, design: .monospaced)).foregroundStyle(.white).padding(8).textSelection(.enabled) }
+                }
             }
             .aspectRatio(16 / 9, contentMode: .fit)
             .overlay(alignment: .bottomTrailing) {

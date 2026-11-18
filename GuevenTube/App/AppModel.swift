@@ -73,7 +73,9 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             do {
                 let settings = await env.settings.current()
+                let t0 = Date()
                 let resolved = try await env.resolver.resolve(item.videoId)
+                let resolveNote = "Auflösung \(Int(Date().timeIntervalSince(t0) * 1000)) ms · \(resolved.clientLabel): \(resolved.summary)"
                 try Task.checkCancellation()
                 captions = resolved.playerData.captions
                 let plan = try PlaybackSourcePlanner.plan(resolved, maxHeight: settings.maxResolution?.height, audioOnly: audioOnly)
@@ -87,7 +89,7 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
                 player.setRate(settings.defaultPlaybackSpeed)
                 player.play(plan, startAtMs: resume, info: .init(title: item.title, artist: item.channelName ?? "",
-                                              artworkUrl: URL(string: item.thumbnailUrl)))
+                                              artworkUrl: URL(string: item.thumbnailUrl)), resolveNote: resolveNote)
             } catch is CancellationError {
             } catch {
                 playbackError = Self.describe(error)
