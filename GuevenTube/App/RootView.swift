@@ -15,7 +15,7 @@ struct RootView: View {
             StartView().tabItem { Label("Start", systemImage: "house") }
             SearchView().tabItem { Label("Suche", systemImage: "magnifyingglass") }
             MusicView().tabItem { Label("Musik", systemImage: "music.note") }
-            PlaceholderView(title: "Mediathek").tabItem { Label("Mediathek", systemImage: "books.vertical") }
+            AccountView().tabItem { Label("Konto", systemImage: "person.crop.circle") }
         }
         .environmentObject(app)
         .environmentObject(music)
