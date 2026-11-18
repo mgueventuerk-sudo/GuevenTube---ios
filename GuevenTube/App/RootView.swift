@@ -1,13 +1,17 @@
 import SwiftUI
 
 struct RootView: View {
+    @StateObject private var app = AppModel()
+
     var body: some View {
         TabView {
-            PlaceholderView(title: "Start").tabItem { Label("Start", systemImage: "house") }
-            PlaceholderView(title: "Suche").tabItem { Label("Suche", systemImage: "magnifyingglass") }
+            StartView().tabItem { Label("Start", systemImage: "house") }
+            SearchView().tabItem { Label("Suche", systemImage: "magnifyingglass") }
             PlaceholderView(title: "Musik").tabItem { Label("Musik", systemImage: "music.note") }
             PlaceholderView(title: "Mediathek").tabItem { Label("Mediathek", systemImage: "books.vertical") }
         }
+        .environmentObject(app)
+        .fullScreenCover(isPresented: $app.showPlayer) { PlayerScreen(player: app.player).environmentObject(app) }
     }
 }
 
