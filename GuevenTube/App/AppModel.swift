@@ -11,11 +11,11 @@ final class AppModel: ObservableObject {
     @Published var showPlayer = false
     private var task: Task<Void, Never>?
 
-    func play(_ item: VideoItem, audioOnly: Bool = false) {
+    func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true) {
         task?.cancel()
         current = item
         playbackError = nil
-        showPlayer = true
+        self.showPlayer = showPlayer
         task = Task { [weak self] in
             guard let self else { return }
             do {
