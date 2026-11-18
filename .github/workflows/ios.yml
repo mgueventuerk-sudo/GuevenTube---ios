@@ -1,0 +1,19 @@
+name: iOS (unsigniertes IPA)
+on: { push: { branches: [main] }, pull_request: {}, workflow_dispatch: {} }
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Tests
+        run: xcodebuild test -project GuevenTube.xcodeproj -scheme GuevenTube -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGNING_ALLOWED=NO
+      - name: Unsigniertes IPA (zum Sideloading)
+        run: |
+          xcodebuild archive -project GuevenTube.xcodeproj -scheme GuevenTube -configuration Release -sdk iphoneos -archivePath build/GT.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+          mkdir -p build/Payload && cp -R build/GT.xcarchive/Products/Applications/GuevenTube.app build/Payload/
+          (cd build && zip -qr GuevenTube-unsigned.ipa Payload)
+          shasum -a 256 build/GuevenTube-unsigned.ipa > build/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: GuevenTube-ipa, path: "build/GuevenTube-unsigned.ipa\nbuild/SHA256SUMS.txt" }
