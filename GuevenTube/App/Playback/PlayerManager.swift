@@ -54,6 +54,12 @@ final class PlayerManager: ObservableObject {
     // MARK: Steuerung
 
     func play(_ plan: PlaybackPlan, startAtMs: Int64 = 0, info: NowPlaying? = nil) {
+        // Ohne aktive Sitzung bricht die Wiedergabe im Hintergrund und bei gesperrtem Bildschirm ab.
+        try? AVAudioSession.sharedInstance().setActive(true)
+        start(plan, startAtMs: startAtMs, info: info)
+    }
+
+    private func start(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?) {
         loadTask?.cancel()
         self.plan = plan
         self.info = info
@@ -66,9 +72,24 @@ final class PlayerManager: ObservableObject {
                 self.attach(item, startAtMs: startAtMs)
             } catch is CancellationError {
             } catch {
-                self?.state = .failed(error.localizedDescription)
+                self?.fallbackOrFail(plan, startAtMs: startAtMs, info: info, error: error)
             }
         }
+    }
+
+    /// Notweg HLS, falls vorhanden; sonst Fehler mit der echten Ursache anzeigen.
+    private func fallbackOrFail(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?, error: Error?) {
+        if let hls = plan.hlsFallbackUrl {
+            var next = plan
+            next.source = .hls(url: hls)
+            next.hlsFallbackUrl = nil
+            next.qualityLabel = "HLS"
+            start(next, startAtMs: startAtMs, info: info)
+            return
+        }
+        let ns = error as NSError?
+        let detail = ns.map { "\($0.localizedDescription) (\($0.domain) \($0.code))" } ?? "Wiedergabe fehlgeschlagen"
+        state = .failed(detail)
     }
 
     func resume() { player.play(); if state == .paused || state == .ready { state = .playing } }
@@ -152,7 +173,8 @@ final class PlayerManager: ObservableObject {
                 self.state = .playing
                 self.publishNowPlaying()
             case .failed:
-                self.state = .failed(item.error?.localizedDescription ?? "Wiedergabe fehlgeschlagen")
+                if let plan = self.plan { self.fallbackOrFail(plan, startAtMs: startAtMs, info: self.info, error: item.error) }
+                else { self.state = .failed(item.error?.localizedDescription ?? "Wiedergabe fehlgeschlagen") }
             default: break
             }
         }.store(in: &itemObservers)

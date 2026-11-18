@@ -112,6 +112,15 @@ final class DeviceAuthFlowTests: XCTestCase {
         XCTAssertGreaterThan(oauth.pollCount, 5)
     }
 
+    func testPermanentPollErrorsAreReportedInsteadOfWaiting() async {
+        let rejected = await flow(FakeOAuth(polls: [.failure("invalid_client")]), profiles: FakeProfiles(), store: FakeAccounts()).run { _ in }
+        XCTAssertEqual(rejected, .failed("Google hat die Anmeldung abgelehnt (invalid_client). Bitte später erneut versuchen."))
+        let offline = FakeOAuth(polls: Array(repeating: .failure("URLError"), count: 12))
+        let result = await flow(offline, profiles: FakeProfiles(), store: FakeAccounts()).run { _ in }
+        XCTAssertEqual(result, .failed("Anmeldung nicht möglich: URLError. Prüfe die Internetverbindung."))
+        XCTAssertEqual(offline.pollCount, 12)
+    }
+
     func testSlowDownLengthensInterval() async {
         let oauth = FakeOAuth(polls: [.slowDown, .slowDown])
         // Intervall: max(2,5)=5 s → 10 s → 15 s …; 600 s Gesamtzeit ergibt weniger Abfragen als bei konstanten 5 s (120).

@@ -30,6 +30,10 @@ public struct DeviceAuthFlow: Sendable {
     public static let minIntervalSeconds: Int64 = 5
     public static let slowDownStepMs: Int64 = 5_000
     public static let defaultAccountName = "Google-Konto"
+    /// Fehlercodes des Token-Endpunkts, bei denen Warten nichts ändert.
+    static let terminalPollErrors: Set<String> = ["invalid_client", "unauthorized_client", "invalid_request", "unsupported_grant_type", "invalid_scope", "invalid_grant"]
+    /// So viele Abfragen in Folge dürfen scheitern (Netz weg), bevor die Anmeldung mit der Ursache abbricht (ca. 1 Minute).
+    static let maxConsecutivePollFailures = 12
 
     private let oauth: DeviceAuthOAuth
     private let profiles: DeviceAuthProfileSource
@@ -66,13 +70,23 @@ public struct DeviceAuthFlow: Sendable {
         report(.awaitingUser(userCode: code.userCode, verificationUrl: code.verificationUrl,
                              qrContent: Self.qrContent(code.verificationUrl, userCode: code.userCode), expiresAtMs: expiresAt))
         var intervalMs = max(code.intervalSeconds, Self.minIntervalSeconds) * 1000
+        var consecutiveFailures = 0
         while nowMs() < expiresAt {
             do { try await sleepMs(intervalMs) } catch { return finish(.idle) }
             let result: TokenPollResult
             do { result = try await oauth.pollToken(deviceCode: code.deviceCode, client: client) } catch { return finish(.idle) }
             switch result {
-            case .pending, .failure: continue   // Netzfehler beim Pollen sind vorübergehend
-            case .slowDown: intervalMs += Self.slowDownStepMs
+            case .pending: consecutiveFailures = 0
+            case .failure(let reason):
+                // Früher wurde jeder Fehler still ignoriert: der Nutzer sah dann bis zum Ablauf nur „warte“ und nie die Ursache.
+                if Self.terminalPollErrors.contains(reason) {
+                    return finish(.failed("Google hat die Anmeldung abgelehnt (\(reason)). Bitte später erneut versuchen."))
+                }
+                consecutiveFailures += 1
+                if consecutiveFailures >= Self.maxConsecutivePollFailures {
+                    return finish(.failed("Anmeldung nicht möglich: \(reason). Prüfe die Internetverbindung."))
+                }
+            case .slowDown: consecutiveFailures = 0; intervalMs += Self.slowDownStepMs
             case .expired: return finish(.failed("Der Code ist abgelaufen. Bitte neu starten."))
             case .denied: return finish(.failed("Die Anmeldung wurde abgelehnt."))
             case .success(let tokens): return await complete(tokens, client: client, report: report)

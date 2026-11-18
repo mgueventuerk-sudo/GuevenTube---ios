@@ -73,7 +73,7 @@ public actor InnerTubeConfigProvider {
             let response = try await transport.send(request)
             guard response.isSuccessful else { throw InnerTubeError(statusCode: response.code, message: "HTTP \(response.code)") }
             let html = response.text
-            let version = Self.firstGroup(#""INNERTUBE_CLIENT_VERSION":"([0-9.]+)""#, in: html)
+            let version = Self.firstGroup(#""INNERTUBE_CLIENT_VERSION":"([0-9.]+)[^"]*""#, in: html)
             let script = Self.firstGroup(#"(/s/_/kabuki/_/js/[^"'\\\s]+/m=base)"#, in: html).map {
                 $0.hasPrefix("http") ? $0 : HTTPConstants.youtubeOrigin + $0
             }

@@ -24,6 +24,9 @@ public struct PlaybackPlan: Equatable, Sendable {
     /// Läuft ohne entschlüsseltes `n`: wird gedrosselt.
     public var throttled: Bool
     public var isLive: Bool
+    /// HLS-Adresse als Notweg: Scheitert das Zusammensetzen von Bild und Ton oder das Laden eines Einzelstroms auf dem Gerät,
+    /// spielt der Player stattdessen den HLS-Strom (AVPlayer kann ihn nativ).
+    public var hlsFallbackUrl: String? = nil
 }
 
 public struct PlaybackPlanError: Error, Equatable, Sendable { public let message: String; public init(_ m: String) { message = m } }
@@ -36,10 +39,12 @@ public enum PlaybackSourcePlanner {
     public static func plan(_ playback: ResolvedPlayback, maxHeight: Int? = nil, audioOnly: Bool = false) throws -> PlaybackPlan {
         let data = playback.playerData
         let live = data.details?.isLive ?? false
-        func make(_ source: PlaybackSource, _ label: String) -> PlaybackPlan {
-            PlaybackPlan(source: source, qualityLabel: label, userAgent: playback.userAgent, throttled: playback.throttlingUnsolved, isLive: live)
-        }
         let hls = (data.hlsManifestUrl ?? "").trimmingCharacters(in: .whitespaces)
+        func make(_ source: PlaybackSource, _ label: String) -> PlaybackPlan {
+            var plan = PlaybackPlan(source: source, qualityLabel: label, userAgent: playback.userAgent, throttled: playback.throttlingUnsolved, isLive: live)
+            if case .hls = source {} else if !hls.isEmpty { plan.hlsFallbackUrl = hls }
+            return plan
+        }
 
         // Live: HLS ist der einzige Weg, der ohne Segmentindex funktioniert.
         if live {

@@ -46,6 +46,15 @@ final class PlaybackSourcePlannerTests: XCTestCase {
         XCTAssertThrowsError(try PlaybackSourcePlanner.plan(playback(adaptive: [opus(10, 160)]), audioOnly: true))
     }
 
+    func testHlsIsKeptAsFallbackForNonHlsSources() throws {
+        let withHls = playback(adaptive: [v(1, 1080), aac(9, 128)], hls: "https://x/h.m3u8")
+        let plan = try PlaybackSourcePlanner.plan(withHls)
+        XCTAssertEqual(plan.source, .separate(videoUrl: "https://x/1", audioUrl: "https://x/9", height: 1080))
+        XCTAssertEqual(plan.hlsFallbackUrl, "https://x/h.m3u8", "Notweg, falls das Zusammensetzen auf dem Gerät scheitert")
+        XCTAssertNil(try PlaybackSourcePlanner.plan(playback(adaptive: [v(1, 1080), aac(9, 128)])).hlsFallbackUrl)
+        XCTAssertNil(try PlaybackSourcePlanner.plan(playback(adaptive: [vp9(3, 1080), opus(10, 160)], hls: "https://x/h.m3u8")).hlsFallbackUrl, "HLS selbst hat keinen Notweg")
+    }
+
     func testLiveUsesHlsOrFails() throws {
         let plan = try PlaybackSourcePlanner.plan(playback(adaptive: [v(1, 720), aac(9, 128)], hls: "https://x/live.m3u8", live: true))
         XCTAssertEqual(plan.source, .hls(url: "https://x/live.m3u8")); XCTAssertTrue(plan.isLive)

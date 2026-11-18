@@ -90,9 +90,19 @@ final class AppModel: ObservableObject {
                                               artworkUrl: URL(string: item.thumbnailUrl)))
             } catch is CancellationError {
             } catch {
-                playbackError = String(describing: error)
+                playbackError = Self.describe(error)
             }
         }
+    }
+
+    /// Lesbare Fehlermeldung samt den versuchten Wegen, damit ein Screenshot die Ursache zeigt.
+    static func describe(_ error: Error) -> String {
+        if let e = error as? PlaybackUnavailableError {
+            return ([e.message] + e.attempts.map { $0.displayLine() }).joined(separator: "\n")
+        }
+        if let e = error as? PlaybackPlanError { return e.message }
+        let ns = error as NSError
+        return "\(ns.localizedDescription) (\(ns.domain) \(ns.code))"
     }
 
     /// Lädt SponsorBlock-Segmente im Hintergrund; ohne Treffer oder bei Fehlern läuft die Wiedergabe unverändert.

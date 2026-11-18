@@ -55,6 +55,14 @@ final class InnerTubeServiceTests: XCTestCase {
         return (service, transport)
     }
 
+    func testConfigAcceptsCanarySuffixInVersion() async {
+        // Echte Seite (11/2026): "7.20261113.09.00-canary_control_7.20261117.12.00". Früher passte der Treffer nicht, es galt die alte Fallback-Version.
+        let page = #"<script>{"INNERTUBE_CLIENT_VERSION":"7.20261113.09.00-canary_control_7.20261117.12.00"}</script>"#
+        let provider = InnerTubeConfigProvider(transport: FakeTransport([.response(HTTPResponse(code: 200, body: Data(page.utf8)))]))
+        let c = await provider.config()
+        XCTAssertEqual(c.tvClientVersion, "7.20261113.09.00")
+    }
+
     func testConfigReadsLiveVersionAndScriptAndFallsBack() async {
         let live = InnerTubeConfigProvider(transport: FakeTransport([.response(HTTPResponse(code: 200, body: Data(tvPage.utf8)))]))
         let c = await live.config()
