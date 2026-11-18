@@ -166,7 +166,7 @@ final class PlayerManager: ObservableObject {
         ]
         // Alle Varianten nur beim ersten Weg; die Notwege prüfen die zwei wahrscheinlichsten (spart Wartezeit).
         let variants = full ? allVariants : Array(allVariants.prefix(2))
-        func fetch(_ url: URL, _ v: Variant) async -> (status: Int, type: String, bytes: Int, ms: Int, head: String, text: String, error: String?) {
+        func fetch(_ url: URL, _ v: Variant) async -> (status: Int, type: String, bytes: Int, ms: Int, head: String, text: String, error: String?, family: String) {
             var u = url
             if v.rangeParam, var c = URLComponents(url: url, resolvingAgainstBaseURL: false) {
                 c.queryItems = (c.queryItems ?? []) + [URLQueryItem(name: "range", value: "0-131071")]
@@ -177,8 +177,9 @@ final class PlayerManager: ObservableObject {
             if !v.rangeParam { r.setValue("bytes=0-131071", forHTTPHeaderField: "Range") }
             for (k, val) in v.headers { r.setValue(val, forHTTPHeaderField: k) }
             let t0 = Date()
+            let family = ConnectionFamily()
             do {
-                let (data, resp) = try await URLSessionTransport.cookieFreeSession.data(for: r)
+                let (data, resp) = try await URLSessionTransport.cookieFreeSession.data(for: r, delegate: family)
                 let h = resp as? HTTPURLResponse
                 let type = h?.value(forHTTPHeaderField: "Content-Type") ?? "?"
                 let ms = max(Int(Date().timeIntervalSince(t0) * 1000), 1)
@@ -186,10 +187,10 @@ final class PlayerManager: ObservableObject {
                 if type.contains("text") || type.contains("json") || type.contains("mpegurl") || type.contains("xml") {
                     text = " „" + String(decoding: data.prefix(50), as: UTF8.self).replacingOccurrences(of: "\n", with: " ") + "“"
                 }
-                return (h?.statusCode ?? 0, type, data.count, ms, data.prefix(8).map { String(format: "%02x", $0) }.joined(), text, nil)
+                return (h?.statusCode ?? 0, type, data.count, ms, data.prefix(8).map { String(format: "%02x", $0) }.joined(), text, nil, family.label)
             } catch {
                 let ns = error as NSError
-                return (0, "", 0, Int(Date().timeIntervalSince(t0) * 1000), "", "", "\(ns.domain) \(ns.code)")
+                return (0, "", 0, Int(Date().timeIntervalSince(t0) * 1000), "", "", "\(ns.domain) \(ns.code)", family.label)
             }
         }
         var lines: [String] = [], bad: Int?, chosen: [String: String] = [:]
@@ -202,7 +203,7 @@ final class PlayerManager: ObservableObject {
                 let res = await fetch(u, v)
                 let good = (200..<300).contains(res.status)
                 if let e = res.error { lines.append("\(tag) \(v.name): \(e) \(res.ms)ms") }
-                else { lines.append("\(tag) \(v.name): HTTP \(res.status) \(res.type) \(res.bytes)B \(res.ms)ms (\(res.bytes / res.ms) kB/s) [\(res.head)]\(res.text)") }
+                else { lines.append("\(tag) \(v.name) via \(res.family): HTTP \(res.status) \(res.type) \(res.bytes)B \(res.ms)ms (\(res.bytes / res.ms) kB/s) [\(res.head)]\(res.text)") }
                 if good {
                     ok = true
                     if !v.rangeParam { for (k, val) in v.headers { chosen[k] = val } }
@@ -213,6 +214,10 @@ final class PlayerManager: ObservableObject {
             }
             // Ist ein Strom abgelehnt, ist der Weg unbrauchbar: den zweiten nicht mehr testen.
             if !ok && bad != nil { break }
+        }
+        // IP-Familie, an die die Adresse gebunden ist (nur v4/v6, nie die Adresse selbst).
+        if full, let first = targets.first, let c = URLComponents(string: first.1), let ip = c.queryItems?.first(where: { $0.name == "ip" })?.value {
+            lines.append("Adresse gebunden an: \(ip.contains(":") ? "IPv6" : "IPv4")")
         }
         // Query-Parameter-Namen (ohne Werte) der ersten Adresse: zeigt z. B. ein fehlendes `pot`.
         if full, bad != nil, let first = targets.first, let c = URLComponents(string: first.1) {
@@ -374,5 +379,15 @@ final class PlayerManager: ObservableObject {
             self?.seek(toMs: Int64(e.positionTime * 1000)); return .success
         }
     }
+}
+
+/// Merkt sich, mit welcher Gegenstelle (IPv4/IPv6) die Anfrage tatsächlich verbunden war.
+/// Die Stream-Adresse gilt nur für die IP, von der `/player` kam: Wechselt die Verbindung die IP-Familie, antwortet Google mit 403.
+private final class ConnectionFamily: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private(set) var remote: String?
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        remote = metrics.transactionMetrics.last?.remoteAddress
+    }
+    var label: String { remote.map { $0.contains(":") ? "v6" : "v4" } ?? "?" }
 }
 #endif
