@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import GuevenCore
 
@@ -13,13 +14,34 @@ final class AppModel: ObservableObject {
     private var skipPlanner: SponsorSkipPlanner?
     private var lastSavedAtMs: Int64 = 0
     private var task: Task<Void, Never>?
+    /// Folge-Videos einer Playlist; leer, sobald etwas anderes gestartet wird.
+    private var queue: [VideoItem] = []
+    @Published private(set) var queueRemaining = 0
+    private var endObserver: AnyCancellable?
 
     init() {
         player.onPosition = { [weak self] ms in self?.handleSkip(ms) }
+        endObserver = player.$state.removeDuplicates().sink { [weak self] state in
+            if state == .ended { self?.playNextInQueue() }
+        }
     }
 
-    func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true) {
+    /// Spielt [items] nacheinander; jedes andere `play` beendet die Reihenfolge.
+    func playQueue(_ items: [VideoItem]) {
+        guard let first = items.first else { return }
+        play(first)
+        queue = Array(items.dropFirst()); queueRemaining = queue.count
+    }
+
+    func playNextInQueue() {
+        guard !queue.isEmpty else { return }
+        let next = queue.removeFirst(); queueRemaining = queue.count
+        play(next, keepQueue: true)
+    }
+
+    func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true, keepQueue: Bool = false) {
         task?.cancel()
+        if !keepQueue { queue = []; queueRemaining = 0 }
         current = item
         skipPlanner = nil; skipPrompt = nil
         playbackError = nil
@@ -82,5 +104,5 @@ final class AppModel: ObservableObject {
         player.seek(toMs: target)
     }
 
-    func closePlayer() { saveProgress(player.positionMs, force: true); task?.cancel(); skipPlanner = nil; skipPrompt = nil; player.stop(); current = nil; showPlayer = false }
+    func closePlayer() { queue = []; queueRemaining = 0; saveProgress(player.positionMs, force: true); task?.cancel(); skipPlanner = nil; skipPrompt = nil; player.stop(); current = nil; showPlayer = false }
 }

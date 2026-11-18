@@ -72,6 +72,9 @@ struct PlaylistDetailView: View {
     var body: some View {
         List {
             if items.isEmpty { Text("Die Playlist ist leer. Im Player über „Zu Playlist“ hinzufügen.").foregroundStyle(.secondary) }
+            if !items.isEmpty {
+                Button { app.playQueue(items) } label: { Label("Alle abspielen", systemImage: "play.fill") }
+            }
             ForEach(items, id: \.videoId) { v in
                 Button { app.play(v) } label: { VideoRow(item: v) }.buttonStyle(.plain)
                     .swipeActions { Button("Entfernen", role: .destructive) { Task { await library.remove(videoId: v.videoId, from: playlist.id); await reload() } } }
