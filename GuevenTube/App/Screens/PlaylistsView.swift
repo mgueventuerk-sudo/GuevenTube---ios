@@ -99,7 +99,11 @@ struct AddToPlaylistMenu: View {
     @State private var lists: [LocalPlaylistWithCount] = []
     @State private var showNew = false
     @State private var newName = ""
+    @State private var accountLists: [AccountPlaylist]?
+    @State private var newAccountList = false
+    @State private var accountError: String?
     private let library = AppEnvironment.shared.library
+    private let account = AccountPlaylists(service: AppEnvironment.shared.innerTube)
 
     var body: some View {
         Menu("Zu Playlist") {
@@ -107,8 +111,34 @@ struct AddToPlaylistMenu: View {
                 Button(p.name) { Task { await library.add(video, to: p.id) } }
             }
             Button("Neue Playlist …") { newName = ""; showNew = true }
+            if let accountLists {
+                Section("YouTube-Konto") {
+                    ForEach(accountLists) { p in
+                        Button { toggle(p) } label: { Label(p.title, systemImage: p.containsVideo ? "checkmark.circle.fill" : "plus.circle") }
+                    }
+                    Button("Neue Konto-Playlist …") { newName = ""; newAccountList = true }
+                }
+            }
         }
-        .onAppear { Task { lists = await library.playlists().filter { $0.name != LocalLibrary.watchLater } } }
+        .onAppear {
+            Task { lists = await library.playlists().filter { $0.name != LocalLibrary.watchLater } }
+            Task { await loadAccountLists() }
+        }
+        .alert("Neue Konto-Playlist", isPresented: $newAccountList) {
+            TextField("Name", text: $newName)
+            Button("Anlegen (privat)") {
+                let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                Task {
+                    do { try await account.create(title: name, videoId: video.videoId); await loadAccountLists() }
+                    catch { accountError = "Playlist konnte nicht angelegt werden." }
+                }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        }
+        .alert("YouTube-Konto", isPresented: Binding(get: { accountError != nil }, set: { if !$0 { accountError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(accountError ?? "") }
         .alert("Neue Playlist", isPresented: $showNew) {
             TextField("Name", text: $newName)
             Button("Anlegen und hinzufügen") {
@@ -117,6 +147,21 @@ struct AddToPlaylistMenu: View {
                 Task { let id = await library.playlistId(named: name); await library.add(video, to: id) }
             }
             Button("Abbrechen", role: .cancel) {}
+        }
+    }
+
+    private func loadAccountLists() async {
+        guard await AppEnvironment.shared.innerTube.hasAccount() else { accountLists = nil; return }
+        accountLists = try? await account.playlists(for: video.videoId)
+    }
+
+    private func toggle(_ p: AccountPlaylist) {
+        Task {
+            do {
+                if p.containsVideo { try await account.remove(playlistId: p.playlistId, videoId: video.videoId) }
+                else { try await account.add(playlistId: p.playlistId, videoId: video.videoId) }
+                await loadAccountLists()
+            } catch { accountError = "Änderung im Konto fehlgeschlagen." }
         }
     }
 }

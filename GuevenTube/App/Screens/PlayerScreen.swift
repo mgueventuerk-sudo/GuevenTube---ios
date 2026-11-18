@@ -20,6 +20,7 @@ struct PlayerScreen: View {
     @StateObject private var downloads = DownloadsModel()
     @State private var showTranscript = false
     @State private var showComments = false
+    @State private var showChat = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +47,7 @@ struct PlayerScreen: View {
                     AddToPlaylistMenu(video: v)
                     if !app.captions.isEmpty { Button("Transkript") { showTranscript = true }.sheet(isPresented: $showTranscript) { TranscriptView().environmentObject(app) } }
                     if !v.isLive { Button("Kommentare") { showComments = true }.sheet(isPresented: $showComments) { CommentsView(videoId: v.videoId) } }
+                    else { Button("Live-Chat") { showChat = true }.sheet(isPresented: $showChat) { LiveChatView(videoId: v.videoId) } }
                     Menu("Herunterladen") {
                         ForEach([DownloadQuality.audioOnly, .hd, .fullHd], id: \.self) { q in
                             Button(q.label) { downloads.enqueue(v, quality: q) }

@@ -16,7 +16,11 @@ targets:
     type: application
     platform: iOS
     sources: [GuevenTube]
-    dependencies: [{package: GuevenCore}]
+    dependencies: [{package: GuevenCore}, {target: GuevenTubeWidget}]
+    entitlements:
+      path: GuevenTube/GuevenTube.entitlements
+      properties:
+        com.apple.security.application-groups: [group.de.gueventube.app]
     info:
       path: GuevenTube/Info.plist
       properties:
@@ -28,6 +32,9 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSAppTransportSecurity: {NSAllowsArbitraryLoads: false}
+        CFBundleURLTypes:
+          - CFBundleURLName: de.gueventube.app
+            CFBundleURLSchemes: [gueventube]
         NSLocalNetworkUsageDescription: GuevenTube sucht Fernseher mit GuevenTube im WLAN, um sie als Fernbedienung zu steuern.
         NSBonjourServices: [_gueventube._tcp]
         NSFaceIDUsageDescription: Face ID entsperrt Konto und Einstellungen.
@@ -43,3 +50,22 @@ targets:
     platform: iOS
     sources: [GuevenTubeTests]
     dependencies: [{target: GuevenTube}]
+  GuevenTubeWidget:
+    type: app-extension
+    platform: iOS
+    sources: [GuevenTubeWidget]
+    dependencies: [{package: GuevenCore}]
+    entitlements:
+      path: GuevenTubeWidget/GuevenTubeWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.de.gueventube.app]
+    info:
+      path: GuevenTubeWidget/Info.plist
+      properties:
+        CFBundleDisplayName: GuevenTube
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.gueventube.app.widget
+        TARGETED_DEVICE_FAMILY: "1"
