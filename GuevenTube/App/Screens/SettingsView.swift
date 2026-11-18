@@ -32,6 +32,15 @@ struct SettingsView: View {
                     }
                 }
             }
+            Section("Benachrichtigungen") {
+                Toggle("Neue Videos meiner Abos", isOn: Binding(
+                    get: { model.settings.newVideoNotifications },
+                    set: { on in
+                        model.change { $0.newVideoNotifications = on }
+                        Task { if on { if await NewVideosService.requestPermission() { NewVideosService.schedule() } } else { NewVideosService.cancel() } }
+                    }))
+                Text("iOS bestimmt den Zeitpunkt der Prüfung; Meldungen können verzögert oder gar nicht kommen.").font(.footnote).foregroundStyle(.secondary)
+            }
             kidsSection
             Section("Titel") { Toggle("DeArrow (bessere Titel und Vorschaubilder)", isOn: binding(\.deArrowEnabled)) }
         }

@@ -1,7 +1,15 @@
 import SwiftUI
 import AVFoundation
+import UserNotifications
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        NewVideosService.register()
+        UNUserNotificationCenter.current().delegate = self
+        Task { if await AppEnvironment.shared.settings.current().newVideoNotifications { NewVideosService.schedule() } }
+        return true
+    }
+
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
         guard identifier == DownloadManager.sessionId else { completionHandler(); return }
         AppEnvironment.shared.downloadManager.backgroundCompletion = completionHandler

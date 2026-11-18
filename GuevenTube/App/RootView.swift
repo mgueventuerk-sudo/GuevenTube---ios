@@ -1,4 +1,5 @@
 import SwiftUI
+import GuevenCore
 
 struct RootView: View {
     @StateObject private var app: AppModel
@@ -26,6 +27,9 @@ struct RootView: View {
         .sheet(item: Binding(get: { app.showPlayer ? nil : app.channelRoute }, set: { app.channelRoute = $0 })) { c in
             NavigationStack { ChannelView(channel: c).toolbar { ToolbarItem(placement: .topBarLeading) { Button("Schließen") { app.channelRoute = nil } } } }
                 .environmentObject(app)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NewVideosService.openVideoNotification)) { n in
+            if let v = n.object as? VideoItem { app.play(v) }
         }
         .task { kids.start(player: app.player); await kids.refreshPin() }
         .fullScreenCover(isPresented: $app.showPlayer) { PlayerScreen(player: app.player).environmentObject(app)

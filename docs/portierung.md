@@ -139,3 +139,7 @@ Mediathek zeigt bei angemeldetem Konto „Verlauf“ (`FEhistory`, `parseFeed`, 
 
 ## Etappe 26 – Musik: Album-, Playlist-, Interpretenseiten (nur Syntaxprüfung)
 `MusicDetailView` über `MusicParser.parseDetail` (Kopf, Titel mit „Alle abspielen“, weitere Abschnitte verlinken wieder auf Seiten); `MusicView` verlinkt Sammlungen per `NavigationLink(value:)`. **Nicht geprüft [sicher]:** Antworten der Musik-Endpunkte mit Album-/Künstler-`browseId` nie gesehen; Interpretenseiten haben oft mehrere Titelabschnitte, `parseDetail` nimmt nur den ersten als „Titel“.
+
+## Etappe 27 – Benachrichtigungen bei neuen Abo-Videos
+Core: `NewVideoTracker` (Port der Logik aus `NewVideosWorker.kt`: erster Lauf merkt nur, ≤3 Meldungen, Shorts/Doppelte weg, aktueller Feed wird nie aus dem Gedächtnis verdrängt, max. 600 IDs; **6 Tests, Linux**). App (nur Syntaxprüfung): `NewVideosService` mit `BGAppRefreshTask` (`UIBackgroundModes: fetch`, `BGTaskSchedulerPermittedIdentifiers`), lokale Meldungen, Tippen startet das Video; Erlaubnis wird erst beim Einschalten in den Einstellungen erfragt. Konto: `FEsubscriptions`-Feed; ohne Konto: bis zu 15 lokale Abos, je 3 neueste.
+**Grenzen [sicher]:** iOS bestimmt den Zeitpunkt selbst (kein festes 3-h-Intervall, bei geringer Nutzung selten oder nie); keine Push-Server, also keine Echtzeitmeldungen; ob `FEsubscriptions` im TV-Client Videos (nicht nur Kanäle) liefert, ist ungeprüft – dann bleibt der Feed leer und es kommt nichts.
