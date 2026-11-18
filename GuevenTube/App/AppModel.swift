@@ -75,7 +75,8 @@ final class AppModel: ObservableObject {
                 let settings = await env.settings.current()
                 let t0 = Date()
                 let resolved = try await env.resolver.resolve(item.videoId)
-                let resolveNote = "Auflösung \(Int(Date().timeIntervalSince(t0) * 1000)) ms · \(resolved.clientLabel): \(resolved.summary)"
+                let tried = resolved.attempts.map { $0.displayLine() }.joined(separator: "\n")
+                let resolveNote = "Auflösung \(Int(Date().timeIntervalSince(t0) * 1000)) ms · \(resolved.clientLabel): \(resolved.summary)" + (tried.isEmpty ? "" : "\n" + tried)
                 try Task.checkCancellation()
                 captions = resolved.playerData.captions
                 let plan = try PlaybackSourcePlanner.plan(resolved, maxHeight: settings.maxResolution?.height, audioOnly: audioOnly)
