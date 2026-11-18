@@ -64,3 +64,6 @@ Fertig: JSON, Parser (Feed/Suche/Player/Watch-Next/Musik), InnerTube-Client, Pla
 
 ## Etappe 6 – Profil-PIN, Kindermodus, Abo-Import, Kanal-Einstellungen (fertig, 224 Tests)
 `ProfileLock` (PBKDF2-HMAC-SHA256 mit 120 000 Runden, Sperrstufen 30 s bis 1 h, fail-closed bei unlesbarer/beschädigter PIN; unter Apple rechnet CommonCrypto, sonst reines Swift, gegen Python-Referenzwerte geprüft), `KidsTimeGuard` (Tageslimit, Schlafenszeit bis 7 Uhr, 30 Minuten PIN-Freigabe), `SubscriptionImport` (Takeout-CSV, NewPipe-JSON, nackte IDs), `ChannelPreferences`. Abweichung: PIN nur ASCII-Ziffern (Android ließ auch andere Unicode-Ziffern zu).
+
+## Etappe 7 – Lokale Bibliothek (fertig, 235 Tests)
+`LocalLibrary` (Actor, eine JSON-Datei statt Room): Weitersehen (ab 30 s, unter 95 %), Fortschrittsbalken, Fortsetz-Position, Abgleich mit gekoppeltem Gerät (nur neuere Einträge), „Später ansehen“ und Merklisten (eindeutige Namen, Löschen mit Einträgen), lokale Abos, Suchverlauf (30). Beschädigte Datei → leer starten. SwiftData ist damit nicht nötig.
