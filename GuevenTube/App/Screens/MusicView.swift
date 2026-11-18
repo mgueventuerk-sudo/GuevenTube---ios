@@ -23,6 +23,7 @@ struct MusicView: View {
             .overlay { if music.loading && music.sections.isEmpty { ProgressView() } }
             .safeAreaInset(edge: .bottom) { MiniPlayer() }
             .navigationTitle("Musik")
+            .navigationDestination(for: MusicCollection.self) { MusicDetailView(collection: $0) }
             .searchable(text: $query, prompt: "Songs, Alben, Interpreten")
             .onSubmit(of: .search) { Task { await music.search(query) } }
             .task { if music.sections.isEmpty { await music.loadHome() } }
@@ -41,7 +42,7 @@ struct MusicView: View {
         if case .song(let s) = item {
             Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { content }.buttonStyle(.plain)
         } else {
-            content.opacity(0.6) // Alben/Playlists/Interpreten: Detailseite folgt
+            if case .collection(let c) = item { NavigationLink(value: c) { content } }
         }
     }
 }
@@ -65,5 +66,68 @@ struct MiniPlayer: View {
             }
             .padding().background(.regularMaterial)
         }
+    }
+}
+
+/// Album, Playlist oder Interpret: Kopf, Titel zum Abspielen und weitere Abschnitte (Alben, Ähnliches).
+struct MusicDetailView: View {
+    @EnvironmentObject var music: MusicModel
+    let collection: MusicCollection
+    @State private var detail: MusicDetail?
+    @State private var error: String?
+
+    var body: some View {
+        List {
+            if let error { Text(error).foregroundStyle(.red) }
+            if let d = detail {
+                Section {
+                    HStack(spacing: 12) {
+                        AsyncImage(url: URL(string: d.thumbnailUrl ?? collection.thumbnailUrl ?? "")) { $0.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.2) }
+                            .frame(width: 96, height: 96).clipShape(RoundedRectangle(cornerRadius: 8))
+                        VStack(alignment: .leading) {
+                            Text(d.title.isEmpty ? collection.title : d.title).font(.headline)
+                            if let s = d.subtitle { Text(s).font(.caption).foregroundStyle(.secondary) }
+                        }
+                    }
+                    if !d.tracks.isEmpty {
+                        Button { music.play(d.tracks, index: 0) } label: { Label("Alle abspielen", systemImage: "play.fill") }
+                    }
+                }
+                if !d.tracks.isEmpty {
+                    Section("Titel") {
+                        ForEach(Array(d.tracks.enumerated()), id: \.offset) { i, t in
+                            Button { music.play(d.tracks, index: i) } label: {
+                                VStack(alignment: .leading) {
+                                    Text(t.title).lineLimit(1)
+                                    if let a = t.artists { Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                                }
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
+                ForEach(Array(d.sections.enumerated()), id: \.offset) { _, section in
+                    Section(section.title) {
+                        ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
+                            switch item {
+                            case .collection(let c): NavigationLink(value: c) { Text(c.title).lineLimit(1) }
+                            case .song(let s): Button(s.title) { music.play([s]) }.buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .overlay { if detail == nil && error == nil { ProgressView() } }
+        .navigationTitle(collection.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func load() async {
+        do {
+            let d = try await music.detail(collection.browseId)
+            detail = d
+            if d.tracks.isEmpty && d.sections.isEmpty { error = "Keine Inhalte gefunden." }
+        } catch { self.error = String(describing: error) }
     }
 }

@@ -136,3 +136,6 @@ Mediathek zeigt bei angemeldetem Konto „Verlauf“ (`FEhistory`, `parseFeed`, 
 
 ## Etappe 25 – Transkript im Player (nur Syntaxprüfung)
 `TranscriptView`: Untertitelspur über `Transcript.pickTrack` (Gerätesprache), json3 per `HTTPTransport`, `parseJson3`, Suche, Tippen springt zur Stelle. `AppModel.captions` kommt aus `ResolvedPlayback.playerData`. **Risiko [wahrscheinlich]:** Untertitel-URLs aus manchen Clients brauchen ein PO-Token und liefern dann leer/403; die Ansicht zeigt dann eine Fehlermeldung statt zu scheitern. Kommentare sind **nicht** portiert (kein Parser im Core, ohne echte Antworten nicht testbar).
+
+## Etappe 26 – Musik: Album-, Playlist-, Interpretenseiten (nur Syntaxprüfung)
+`MusicDetailView` über `MusicParser.parseDetail` (Kopf, Titel mit „Alle abspielen“, weitere Abschnitte verlinken wieder auf Seiten); `MusicView` verlinkt Sammlungen per `NavigationLink(value:)`. **Nicht geprüft [sicher]:** Antworten der Musik-Endpunkte mit Album-/Künstler-`browseId` nie gesehen; Interpretenseiten haben oft mehrere Titelabschnitte, `parseDetail` nimmt nur den ersten als „Titel“.

@@ -34,6 +34,11 @@ final class MusicModel: ObservableObject {
         await load { try await self.musicCall("search", [("query", .string(text))]) }
     }
 
+    /// Album-, Playlist- oder Interpretenseite.
+    func detail(_ browseId: String) async throws -> MusicDetail {
+        MusicParser.parseDetail(try await musicCall("browse", [("browseId", .string(browseId))]))
+    }
+
     private func load(_ call: () async throws -> JSON) async {
         loading = true; defer { loading = false }
         do {
