@@ -20,7 +20,10 @@ final class LinkModel: ObservableObject {
     private init() {}
 
     @Published private(set) var connection: Connection = .idle
-    @Published private(set) var tvState = LinkPlayerState()
+    @Published private(set) var tvState = LinkPlayerState() { didSet { followTv() } }
+    /// Gemeinsam schauen (Labor, aus): das iPhone folgt dem Fernseher. Wie auf Android nur im Speicher, nicht gespeichert.
+    @Published var watchTogether = false { didSet { if watchTogether { followTv() } } }
+    weak var app: AppModel?
     @Published private(set) var discovered: [DiscoveredTv] = []
     @Published private(set) var paired: [PairedDevice] = []
 
@@ -196,7 +199,30 @@ final class LinkModel: ObservableObject {
         videoId.firstMatch(in: p.videoId, range: NSRange(p.videoId.startIndex..., in: p.videoId)) != nil
     }
 
+    // MARK: Gemeinsam schauen
+
+    /// Gleicht den iPhone-Player mit dem Fernseher ab (`WatchTogether.plan`, getestet). Seek/Pause erst, wenn der Player bereit ist.
+    private func followTv() {
+        guard watchTogether, isConnected, let app else { return }
+        let state = app.player.state
+        let ready = state == .playing || state == .paused
+        let steps = WatchTogether.plan(tv: tvState, localVideoId: app.current?.videoId, localPositionMs: app.player.positionMs,
+                                       localPlaying: state == .playing)
+        for step in steps {
+            switch step {
+            case .open(let id, let pos):
+                let s = tvState
+                app.play(VideoItem(videoId: id, title: s.title, channelName: s.author.isEmpty ? nil : s.author,
+                                   thumbnailUrl: s.thumbnailUrl ?? InnerTubeParser.fallbackThumbnail(id), isLive: s.isLive),
+                         startAtMs: pos)
+            case .seekTo(let pos): if ready { app.player.seek(toMs: pos) }
+            case .setPlaying(let on): if ready { on ? app.player.resume() : app.player.pause() }
+            }
+        }
+    }
+
     // MARK: Befehle
+
 
     func play(_ v: VideoItem, startMs: Int64? = nil) { send(LinkMessage(t: LinkMessage.play, video: Self.link(v), startMs: startMs)) }
     func addToQueue(_ v: VideoItem) { send(LinkMessage(t: LinkMessage.queueAdd, video: Self.link(v))) }

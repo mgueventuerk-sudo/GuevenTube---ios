@@ -3,8 +3,25 @@ import GuevenCore
 
 struct AccountView: View {
     @StateObject private var model = AccountModel()
+    @AppStorage(DeviceLock.defaultsKey) private var lockEnabled = false
+    @State private var unlocked = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
+        if lockEnabled && !unlocked {
+            VStack(spacing: 16) {
+                Image(systemName: "lock.fill").font(.system(size: 44)).foregroundStyle(.secondary)
+                Text("Konto und Einstellungen sind gesperrt")
+                Button("Entsperren") { Task { unlocked = await DeviceLock.confirm("Konto und Einstellungen öffnen") } }
+                    .buttonStyle(.borderedProminent)
+            }
+            .task { if !unlocked { unlocked = await DeviceLock.confirm("Konto und Einstellungen öffnen") } }
+        } else {
+            content.onChange(of: scenePhase) { _, p in if p == .background { unlocked = false } }
+        }
+    }
+
+    private var content: some View {
         NavigationStack {
             List {
                 Section {

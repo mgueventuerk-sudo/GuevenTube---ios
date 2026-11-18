@@ -11,7 +11,7 @@ struct RemoteView: View {
     var body: some View {
         List {
             statusSection
-            if link.isConnected { controlSection; queueSection; textSection }
+            if link.isConnected { controlSection; queueSection; textSection; togetherSection }
             devicesSection
         }
         .navigationTitle("Fernseher")
@@ -93,6 +93,14 @@ struct RemoteView: View {
                 }
                 Button("Warteschlange leeren", role: .destructive) { link.clearQueue() }
             }
+        }
+    }
+
+    private var togetherSection: some View {
+        Section {
+            Toggle("Gemeinsam schauen (Labor)", isOn: $link.watchTogether)
+        } footer: {
+            Text("Das iPhone spielt dasselbe Video wie der Fernseher und folgt Position und Pause. Der Fernseher führt.")
         }
     }
 

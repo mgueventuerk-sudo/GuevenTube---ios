@@ -5,6 +5,7 @@ struct SettingsView: View {
     @StateObject private var model = SettingsModel()
     @EnvironmentObject private var kids: KidsModel
     @State private var kidsUnlocked = false
+    @AppStorage(DeviceLock.defaultsKey) private var lockEnabled = false
     @State private var pinInput = ""
     @State private var newPin = ""
     @State private var kidsMessage: String?
@@ -40,6 +41,14 @@ struct SettingsView: View {
                         Task { if on { if await NewVideosService.requestPermission() { NewVideosService.schedule() } } else { NewVideosService.cancel() } }
                     }))
                 Text("iOS bestimmt den Zeitpunkt der Prüfung; Meldungen können verzögert oder gar nicht kommen.").font(.footnote).foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Konto und Einstellungen sperren", isOn: Binding(get: { lockEnabled }, set: { on in
+                    Task { if await DeviceLock.confirm(on ? "Sperre einschalten" : "Sperre ausschalten") { lockEnabled = on } }
+                }))
+                .disabled(!DeviceLock.isAvailable && !lockEnabled)
+            } header: { Text("Sicherheit") } footer: {
+                Text(DeviceLock.isAvailable ? "Face ID, Touch ID oder Geräte-Code" : "Erst einen Geräte-Code in iOS einrichten")
             }
             kidsSection
             Section("Titel") { Toggle("DeArrow (bessere Titel und Vorschaubilder)", isOn: binding(\.deArrowEnabled)) }

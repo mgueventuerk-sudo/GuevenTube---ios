@@ -30,10 +30,13 @@ targets:
         NSAppTransportSecurity: {NSAllowsArbitraryLoads: false}
         NSLocalNetworkUsageDescription: GuevenTube sucht Fernseher mit GuevenTube im WLAN, um sie als Fernbedienung zu steuern.
         NSBonjourServices: [_gueventube._tcp]
+        NSFaceIDUsageDescription: Face ID entsperrt Konto und Einstellungen.
         NSCameraUsageDescription: Die Kamera liest den QR-Code zum Koppeln mit dem Fernseher.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.gueventube.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
   GuevenTubeTests:
     type: bundle.unit-test

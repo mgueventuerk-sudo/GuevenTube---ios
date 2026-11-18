@@ -19,6 +19,7 @@ struct PlayerScreen: View {
     @ObservedObject var player: PlayerManager
     @StateObject private var downloads = DownloadsModel()
     @State private var showTranscript = false
+    @State private var showComments = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -44,6 +45,7 @@ struct PlayerScreen: View {
                     Button("Später ansehen") { Task { await AppEnvironment.shared.library.addToWatchLater(v) } }
                     AddToPlaylistMenu(video: v)
                     if !app.captions.isEmpty { Button("Transkript") { showTranscript = true }.sheet(isPresented: $showTranscript) { TranscriptView().environmentObject(app) } }
+                    if !v.isLive { Button("Kommentare") { showComments = true }.sheet(isPresented: $showComments) { CommentsView(videoId: v.videoId) } }
                     Menu("Herunterladen") {
                         ForEach([DownloadQuality.audioOnly, .hd, .fullHd], id: \.self) { q in
                             Button(q.label) { downloads.enqueue(v, quality: q) }

@@ -61,7 +61,7 @@ final class AppModel: ObservableObject {
         play(next, keepQueue: true)
     }
 
-    func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true, keepQueue: Bool = false) {
+    func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true, keepQueue: Bool = false, startAtMs: Int64? = nil) {
         task?.cancel()
         if !keepQueue { queue = []; queueRemaining = 0 }
         autoplayAllowed = !audioOnly && !keepQueue
@@ -78,7 +78,7 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
                 let plan = try PlaybackSourcePlanner.plan(resolved, maxHeight: settings.maxResolution?.height, audioOnly: audioOnly)
                 Task { await self.loadSponsorSegments(item.videoId) }
-                let resume = audioOnly ? 0 : await env.library.resumePositionMs(item.videoId)
+                let resume: Int64 = audioOnly ? 0 : (startAtMs ?? (await env.library.resumePositionMs(item.videoId)))
                 player.setRate(settings.defaultPlaybackSpeed)
                 player.play(plan, startAtMs: resume, info: .init(title: item.title, artist: item.channelName ?? "",
                                               artworkUrl: URL(string: item.thumbnailUrl)))

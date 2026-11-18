@@ -11,6 +11,7 @@ struct RootView: View {
     init() {
         let a = AppModel()
         _app = StateObject(wrappedValue: a)
+        LinkModel.shared.app = a
         _music = StateObject(wrappedValue: MusicModel(app: a))
     }
 
