@@ -91,7 +91,10 @@ final class PlayerManager: ObservableObject {
     private var watchdog: Task<Void, Never>?
     private var startGeneration = 0
     /// Was jeder Versuch ergeben hat (Weg, HTTP-Status, Tempo, Dateikopf): erscheint bei einem Fehler im Player.
-    private var diag: [String] = []
+    private(set) var diag: [String] = []
+    /// Hat der Videoserver alle Notwege eines Wegs abgelehnt (HTTP 4xx), fragt der Player den Aufrufer nach dem nächsten Weg.
+    /// Rückgabe `true` = der Aufrufer startet neu, kein Fehler anzeigen.
+    var onRouteRejected: ((_ routeLabel: String, _ status: Int) -> Bool)?
 
     private func start(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?, full: Bool = false) {
         loadTask?.cancel()
@@ -140,6 +143,8 @@ final class PlayerManager: ObservableObject {
             return
         }
         let ns = error as NSError?
+        if let ns, ns.domain == "GuevenTube", (400..<500).contains(ns.code), let label = plan?.clientLabel, !label.isEmpty,
+           onRouteRejected?(label, ns.code) == true { return }
         var detail = ns.map { "\($0.localizedDescription) (\($0.domain) \($0.code))" } ?? "Wiedergabe fehlgeschlagen"
         if let u = ns?.userInfo[NSUnderlyingErrorKey] as? NSError { detail += " ← \(u.domain) \(u.code)" }
         state = .failed(([detail] + diag).joined(separator: "\n"))

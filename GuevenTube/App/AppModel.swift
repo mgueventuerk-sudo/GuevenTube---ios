@@ -24,8 +24,12 @@ final class AppModel: ObservableObject {
     private var endObserver: AnyCancellable?
     /// Autoplay nur nach einzeln gestarteten Videos: nicht nach Musik (eigene Warteschlange) und nicht nach Playlists.
     private var autoplayAllowed = false
+    /// Wie oft für das aktuelle Video nach einer Ablehnung durch den Videoserver ein anderer Weg versucht wurde.
+    private var routeRetries = 0
+    private var lastAudioOnly = false
 
     init() {
+        player.onRouteRejected = { [weak self] label, _ in self?.retryWithNextRoute(label) ?? false }
         player.onPosition = { [weak self] ms in self?.handleSkip(ms) }
         endObserver = player.$state.removeDuplicates().sink { [weak self] state in
             if state == .ended { self?.playNextInQueue() }
@@ -61,10 +65,14 @@ final class AppModel: ObservableObject {
         play(next, keepQueue: true)
     }
 
-    func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true, keepQueue: Bool = false, startAtMs: Int64? = nil) {
+    func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true, keepQueue: Bool = false, startAtMs: Int64? = nil, isRouteRetry: Bool = false) {
         task?.cancel()
-        if !keepQueue { queue = []; queueRemaining = 0 }
-        autoplayAllowed = !audioOnly && !keepQueue
+        if !isRouteRetry {
+            routeRetries = 0
+            if !keepQueue { queue = []; queueRemaining = 0 }
+            autoplayAllowed = !audioOnly && !keepQueue
+        }
+        lastAudioOnly = audioOnly
         current = item
         skipPlanner = nil; skipPrompt = nil; captions = []
         playbackError = nil
@@ -77,7 +85,9 @@ final class AppModel: ObservableObject {
                 let resolved = try await env.resolver.resolve(item.videoId)
                 let potStatus = await env.poTokens.status
                 let tried = resolved.attempts.map { $0.displayLine() }.joined(separator: "\n")
-                let resolveNote = "Auflösung \(Int(Date().timeIntervalSince(t0) * 1000)) ms · \(resolved.clientLabel): \(resolved.summary)" + (tried.isEmpty ? "" : "\n" + tried)
+                // Nach einem abgelehnten Weg: bisherige Messwerte vorne anhängen, damit ein Fehler alle Wege zeigt.
+                let earlier = isRouteRetry ? player.diag.joined(separator: "\n") + "\n— nächster Weg —\n" : ""
+                let resolveNote = earlier + "Auflösung \(Int(Date().timeIntervalSince(t0) * 1000)) ms · \(resolved.clientLabel): \(resolved.summary)" + (tried.isEmpty ? "" : "\n" + tried)
                     + "\nPO-Token: " + potStatus
                 try Task.checkCancellation()
                 captions = resolved.playerData.captions
@@ -98,6 +108,19 @@ final class AppModel: ObservableObject {
                 playbackError = Self.describe(error)
             }
         }
+    }
+
+    /// Der Videoserver hat die Streams eines Wegs abgelehnt: Weg sperren, neu auflösen (nächster Weg), höchstens zweimal.
+    private func retryWithNextRoute(_ routeLabel: String) -> Bool {
+        guard routeRetries < 2, let item = current else { return false }
+        routeRetries += 1
+        let audioOnly = lastAudioOnly, show = showPlayer
+        Task { [weak self] in
+            guard let self else { return }
+            await env.resolver.rejectRoute(videoId: item.videoId, routeLabel: routeLabel)
+            play(item, audioOnly: audioOnly, showPlayer: show, keepQueue: true, isRouteRetry: true)
+        }
+        return true
     }
 
     /// Lesbare Fehlermeldung samt den versuchten Wegen, damit ein Screenshot die Ursache zeigt.

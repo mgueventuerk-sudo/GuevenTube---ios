@@ -13,6 +13,8 @@ actor PoTokenMinter: PoTokenProviding {
     private var failures = 0
     private var pausedUntil = Date.distantPast
     private var releaseTask: Task<Void, Never>?
+    /// Läuft gerade ein Aufbau, hängen sich weitere Aufrufer daran (sonst entstünden zwei WebViews: Vorwärmen + erste Wiedergabe).
+    private var creating: Task<WebViewPoTokenGenerator, Error>?
     private(set) var status = "noch nicht benutzt"
 
     private let timeout: TimeInterval = 15
@@ -56,8 +58,13 @@ actor PoTokenMinter: PoTokenProviding {
 
     private func currentGenerator() async throws -> WebViewPoTokenGenerator {
         if let g = generator, await !g.isExpired { return g }
+        if let running = creating { return try await running.value }
         await dropGenerator()
-        let g = try await WebViewPoTokenGenerator.create(transport: transport)
+        let transport = self.transport
+        let task = Task { try await WebViewPoTokenGenerator.create(transport: transport) }
+        creating = task
+        defer { creating = nil }
+        let g = try await task.value
         generator = g
         return g
     }
@@ -95,15 +102,25 @@ actor PoTokenMinter: PoTokenProviding {
         }
     }
 
+    /// Gibt nach [seconds] auf, auch wenn [work] hängt (WebView-Rückrufe sind nicht abbrechbar; eine Task-Gruppe würde darauf warten).
     private func withTimeout<T: Sendable>(_ seconds: TimeInterval, _ work: @escaping @Sendable () async throws -> T) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask { try await work() }
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                throw PoTokenError("Zeitüberschreitung nach \(Int(seconds)) s")
+        let gate = OnceGate()
+        return try await withCheckedThrowingContinuation { (c: CheckedContinuation<T, Error>) in
+            let job = Task {
+                do { let v = try await work(); if gate.take() { c.resume(returning: v) } }
+                catch { if gate.take() { c.resume(throwing: error) } }
             }
-            defer { group.cancelAll() }
-            return try await group.next()!
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                if gate.take() { job.cancel(); c.resume(throwing: PoTokenError("Zeitüberschreitung nach \(Int(seconds)) s")) }
+            }
         }
     }
+}
+
+/// Lässt genau einen Aufrufer „gewinnen“.
+private final class OnceGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var taken = false
+    func take() -> Bool { lock.lock(); defer { lock.unlock() }; if taken { return false }; taken = true; return true }
 }
