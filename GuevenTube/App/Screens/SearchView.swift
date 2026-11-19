@@ -12,13 +12,13 @@ struct SearchView: View {
     var body: some View {
         NavigationStack {
             List {
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText).listRowBackground(GT.background) }
                 ForEach(videos, id: \.videoId) { v in
-                    Button { app.play(v) } label: { VideoRow(item: v) }.buttonStyle(.plain)
+                    VideoRow(item: v, style: .card)
                         .onAppear { if v.videoId == videos.last?.videoId { Task { await more() } } }
                 }
             }
-            .listStyle(.plain)
+            .gtList()
             .overlay { if loading && videos.isEmpty { ProgressView() } }
             .navigationTitle("Suche")
             .searchable(text: $query, prompt: "Videos suchen")
@@ -33,7 +33,7 @@ struct SearchView: View {
         do {
             let page = InnerTubeParser.parseSearch(try await app.env.innerTube.search(query: q))
             videos = page.videos; continuation = page.continuation; error = nil
-        } catch { self.error = String(describing: error) }
+        } catch { self.error = GTError.text(error) }
     }
 
     private func more() async {
@@ -44,6 +44,6 @@ struct SearchView: View {
             let known = Set(videos.map(\.videoId))
             videos += page.videos.filter { !known.contains($0.videoId) }
             continuation = page.continuation
-        } catch { self.error = String(describing: error) }
+        } catch { self.error = GTError.text(error) }
     }
 }

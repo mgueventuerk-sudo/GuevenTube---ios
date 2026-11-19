@@ -21,7 +21,7 @@ struct LiveChatView: View {
                     }
                     .id(m.id)
                 }
-                .listStyle(.plain)
+                .gtList()
                 .onChange(of: messages.last?.id) { _, id in if let id { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } }
             }
             .overlay {
@@ -32,7 +32,7 @@ struct LiveChatView: View {
                 }
             }
             .navigationTitle("Live-Chat").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Fertig") { dismiss() } } }
+            .doneToolbar { dismiss() }
             .task(id: videoId) { await run() }
         }
     }

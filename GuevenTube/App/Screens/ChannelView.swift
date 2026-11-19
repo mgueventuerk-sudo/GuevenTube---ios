@@ -21,11 +21,23 @@ struct ChannelView: View {
 
     var body: some View {
         List {
-            if let error { Text(error).foregroundStyle(.red) }
+            // Abonnieren steht im Inhalt, nicht in der Leiste: Dort sitzt im Sheet schon „Fertig“.
+            HStack {
+                Button { Task { await toggle() } } label: {
+                    Label(subscribed ? "Abonniert" : "Abonnieren", systemImage: subscribed ? "checkmark" : "bell")
+                        .font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 36)
+                        .background(subscribed ? GT.surface : GT.accent, in: Capsule())
+                        .foregroundStyle(subscribed ? Color.primary : Color.white)
+                }
+                .buttonStyle(.plain).frame(minHeight: GT.Metric.touch)
+                Spacer()
+            }
+            .listRowBackground(GT.background).listRowSeparator(.hidden)
+            if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText).listRowBackground(GT.background) }
             ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
                 Section(shelf.title) {
                     ForEach(shelf.items, id: \.videoId) { v in
-                        Button { Task { await open(v) } } label: { VideoRow(item: v) }.buttonStyle(.plain)
+                        VideoRow(item: v, style: .card, onPlay: { Task { await open(v) } })
                     }
                 }
             }
@@ -33,13 +45,10 @@ struct ChannelView: View {
                 Button("Mehr laden") { Task { await more() } }.disabled(loading)
             }
         }
-        .listStyle(.plain)
+        .gtList()
         .overlay { if loading && shelves.isEmpty { ProgressView() } }
         .navigationTitle(channel.name)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            Button(subscribed ? "Abonniert" : "Abonnieren") { Task { await toggle() } }
-        }
         .task { subscribed = await library.isSubscribed(channel.channelId); if shelves.isEmpty { await first() } }
     }
 
@@ -63,7 +72,7 @@ struct ChannelView: View {
             let page = InnerTubeParser.parseFeed(try await app.env.innerTube.browse(browseId: channel.channelId), defaultShelfTitle: "Videos")
             shelves = page.shelves; continuation = page.continuation
             error = shelves.isEmpty ? "Keine Videos gefunden." : nil
-        } catch { self.error = String(describing: error) }
+        } catch { self.error = GTError.text(error) }
     }
 
     private func more() async {

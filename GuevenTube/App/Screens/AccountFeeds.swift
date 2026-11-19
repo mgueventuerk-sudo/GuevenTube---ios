@@ -11,13 +11,13 @@ struct HistoryView: View {
 
     var body: some View {
         List {
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText) }
             ForEach(videos, id: \.videoId) { v in
-                Button { app.play(v) } label: { VideoRow(item: v) }.buttonStyle(.plain)
+                VideoRow(item: v)
                     .onAppear { if v.videoId == videos.last?.videoId { Task { await more() } } }
             }
         }
-        .listStyle(.plain)
+        .gtList()
         .overlay { if loading && videos.isEmpty { ProgressView() } }
         .navigationTitle("Verlauf")
         .refreshable { await first() }
@@ -30,7 +30,7 @@ struct HistoryView: View {
             let page = InnerTubeParser.parseFeed(try await app.env.innerTube.browse(browseId: InnerTubeService.browseHistory), defaultShelfTitle: "Verlauf")
             videos = dedupe(page.shelves.flatMap(\.items)); continuation = page.continuation
             error = videos.isEmpty ? "Kein Verlauf gefunden (Anmeldung nötig?)." : nil
-        } catch { self.error = String(describing: error) }
+        } catch { self.error = GTError.text(error) }
     }
 
     private func more() async {
@@ -66,7 +66,7 @@ struct SubscriptionsView: View {
                     }
                 }
             }
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText) }
             ForEach(channels, id: \.channelId) { c in
                 Button { app.channelRoute = ChannelRef(channelId: c.channelId, name: c.name, avatarUrl: c.avatarUrl) } label: { HStack(spacing: 12) {
                     AsyncImage(url: c.avatarUrl.flatMap(URL.init(string:))) { $0.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.2) }
@@ -77,7 +77,7 @@ struct SubscriptionsView: View {
                 } }.buttonStyle(.plain)
             }
         }
-        .listStyle(.plain)
+        .gtList()
         .overlay { if loading && channels.isEmpty { ProgressView() } }
         .navigationTitle("Abos")
         .refreshable { await load() }
@@ -92,6 +92,6 @@ struct SubscriptionsView: View {
         do {
             channels = InnerTubeParser.parseSubscriptionChannels(try await app.env.innerTube.browse(browseId: InnerTubeService.browseSubscriptions))
             error = channels.isEmpty && localChannels.isEmpty ? "Keine Abos gefunden." : nil
-        } catch { self.error = String(describing: error) }
+        } catch { self.error = GTError.text(error) }
     }
 }

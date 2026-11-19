@@ -21,10 +21,10 @@ struct CommentsView: View {
                     Button("Mehr laden") { Task { await loadMore() } }.disabled(loading)
                 }
             }
-            .listStyle(.plain)
+            .gtList()
             .overlay { if loading && comments.isEmpty { ProgressView() } }
             .navigationTitle("Kommentare").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Fertig") { dismiss() } } }
+            .doneToolbar { dismiss() }
             .task(id: videoId) { await first() }
         }
     }

@@ -24,7 +24,7 @@ struct LibraryView: View {
                 if !continueWatching.isEmpty {
                     Section("Weiterschauen") {
                         ForEach(continueWatching, id: \.videoId) { v in
-                            Button { app.play(v) } label: { VideoRow(item: v) }.buttonStyle(.plain)
+                            VideoRow(item: v)
                                 .swipeActions { Button("Entfernen", role: .destructive) { Task { await library.removeProgress(v.videoId); await reload() } } }
                         }
                     }
@@ -32,13 +32,13 @@ struct LibraryView: View {
                 if !watchLater.isEmpty {
                     Section("Später ansehen") {
                         ForEach(watchLater, id: \.videoId) { v in
-                            Button { app.play(v) } label: { VideoRow(item: v) }.buttonStyle(.plain)
+                            VideoRow(item: v)
                                 .swipeActions { Button("Entfernen", role: .destructive) { Task { await library.removeFromWatchLater(v.videoId); await reload() } } }
                         }
                     }
                 }
             }
-            .listStyle(.plain)
+            .gtList()
             .navigationTitle("Mediathek")
             .task { await reload() }
             .refreshable { await reload() }

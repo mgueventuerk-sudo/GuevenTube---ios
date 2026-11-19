@@ -10,16 +10,16 @@ struct StartView: View {
     var body: some View {
         NavigationStack {
             List {
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText).listRowBackground(GT.background) }
                 ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
                     Section(shelf.title) {
                         ForEach(shelf.items, id: \.videoId) { v in
-                            Button { app.play(v) } label: { VideoRow(item: v) }.buttonStyle(.plain)
+                            VideoRow(item: v, style: .card)
                         }
                     }
                 }
             }
-            .listStyle(.plain)
+            .gtList()
             .overlay { if loading && shelves.isEmpty { ProgressView() } }
             .navigationTitle("Start")
             .refreshable { await load() }
@@ -35,7 +35,7 @@ struct StartView: View {
             shelves = page.shelves
             error = page.shelves.isEmpty ? "Keine Videos erhalten." : nil
         } catch {
-            self.error = String(describing: error)
+            self.error = GTError.text(error)
         }
     }
 }

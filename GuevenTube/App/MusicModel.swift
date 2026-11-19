@@ -44,7 +44,7 @@ final class MusicModel: ObservableObject {
         do {
             sections = MusicParser.parseSections(try await call()).sections
             error = sections.isEmpty ? "Keine Ergebnisse." : nil
-        } catch { self.error = String(describing: error) }
+        } catch { self.error = GTError.text(error) }
     }
 
     private func musicCall(_ endpoint: String, _ payload: [(String, JSON)]) async throws -> JSON {
@@ -92,6 +92,6 @@ final class MusicModel: ObservableObject {
             let songs = MusicParser.parseQueue(json).songs
             let result = queue.applyRadio(songs, startWhenLoaded: startWhenLoaded, using: &rng)
             if let song = result.effect.play { start(song) }
-        } catch { self.error = String(describing: error) }
+        } catch { self.error = GTError.text(error) }
     }
 }

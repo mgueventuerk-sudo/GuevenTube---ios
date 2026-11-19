@@ -13,7 +13,7 @@ struct KidsBlockView: View {
             Image(systemName: "moon.zzz.fill").font(.system(size: 56))
             Text(reason).multilineTextAlignment(.center).font(.headline)
             SecureField("PIN", text: $pin).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(maxWidth: 200)
-            if let error { Text(error).foregroundStyle(.red).font(.footnote) }
+            if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText).font(.footnote) }
             Button("Entsperren") {
                 Task { error = await kids.unlock(pin: pin); pin = "" }
             }.buttonStyle(.borderedProminent).disabled(pin.count < 4)

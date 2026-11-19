@@ -27,6 +27,7 @@ struct RootView: View {
             LibraryView().tabItem { Label("Mediathek", systemImage: "books.vertical") }
             AccountView().tabItem { Label("Konto", systemImage: "person.crop.circle") }
         }
+        .tint(GT.accent)
         .environmentObject(app)
         .environmentObject(music)
         .environmentObject(kids)
@@ -47,7 +48,7 @@ struct RootView: View {
         } message: { Text("„\(pendingPair?.name ?? "")“ (\(pendingPair?.host ?? "")) als Fernbedienung verbinden.") }
         .overlay { if let b = kids.block, !app.showPlayer { KidsBlockView(reason: b.reason).environmentObject(kids) } }
         .sheet(item: Binding(get: { app.showPlayer ? nil : app.channelRoute }, set: { app.channelRoute = $0 })) { c in
-            NavigationStack { ChannelView(channel: c).toolbar { ToolbarItem(placement: .topBarLeading) { Button("Schließen") { app.channelRoute = nil } } } }
+            NavigationStack { ChannelView(channel: c).doneToolbar { app.channelRoute = nil } }
                 .environmentObject(app)
         }
         .onReceive(NotificationCenter.default.publisher(for: NewVideosService.openVideoNotification)) { n in

@@ -19,7 +19,7 @@ struct MusicView: View {
                     }
                 }
             }
-            .listStyle(.plain)
+            .gtList()
             .overlay { if music.loading && music.sections.isEmpty { ProgressView() } }
             .safeAreaInset(edge: .bottom) { MiniPlayer() }
             .navigationTitle("Musik")
@@ -78,7 +78,7 @@ struct MusicDetailView: View {
 
     var body: some View {
         List {
-            if let error { Text(error).foregroundStyle(.red) }
+            if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText) }
             if let d = detail {
                 Section {
                     HStack(spacing: 12) {
@@ -128,6 +128,6 @@ struct MusicDetailView: View {
             let d = try await music.detail(collection.browseId)
             detail = d
             if d.tracks.isEmpty && d.sections.isEmpty { error = "Keine Inhalte gefunden." }
-        } catch { self.error = String(describing: error) }
+        } catch { self.error = GTError.text(error) }
     }
 }

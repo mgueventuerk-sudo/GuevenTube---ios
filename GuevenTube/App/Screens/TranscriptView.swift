@@ -25,12 +25,12 @@ struct TranscriptView: View {
                     }.buttonStyle(.plain)
                 }
             }
-            .listStyle(.plain)
+            .gtList()
             .searchable(text: $query, prompt: "Im Video suchen")
             .overlay { if loading { ProgressView() } }
             .navigationTitle("Transkript")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Schließen") { dismiss() } } }
+            .doneToolbar { dismiss() }
             .task { await load() }
         }
     }

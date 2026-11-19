@@ -76,11 +76,11 @@ struct PlaylistDetailView: View {
                 Button { app.playQueue(items) } label: { Label("Alle abspielen", systemImage: "play.fill") }
             }
             ForEach(items, id: \.videoId) { v in
-                Button { app.play(v) } label: { VideoRow(item: v) }.buttonStyle(.plain)
+                VideoRow(item: v)
                     .swipeActions { Button("Entfernen", role: .destructive) { Task { await library.remove(videoId: v.videoId, from: playlist.id); await reload() } } }
             }
         }
-        .listStyle(.plain)
+        .gtList()
         .navigationTitle(playlist.name)
         .task { await reload() }
     }
@@ -94,8 +94,9 @@ struct PlaylistDetailView: View {
 }
 
 /// Menü „Zu Playlist“ im Player; legt auf Wunsch eine neue Liste an.
-struct AddToPlaylistMenu: View {
+struct AddToPlaylistMenu<MenuLabel: View>: View {
     let video: VideoItem
+    @ViewBuilder var label: MenuLabel
     @State private var lists: [LocalPlaylistWithCount] = []
     @State private var showNew = false
     @State private var newName = ""
@@ -106,7 +107,7 @@ struct AddToPlaylistMenu: View {
     private let account = AccountPlaylists(service: AppEnvironment.shared.innerTube)
 
     var body: some View {
-        Menu("Zu Playlist") {
+        Menu {
             ForEach(lists, id: \.id) { p in
                 Button(p.name) { Task { await library.add(video, to: p.id) } }
             }
@@ -119,7 +120,8 @@ struct AddToPlaylistMenu: View {
                     Button("Neue Konto-Playlist …") { newName = ""; newAccountList = true }
                 }
             }
-        }
+        } label: { label }
+        .frame(minHeight: GT.Metric.touch)
         .onAppear {
             Task { lists = await library.playlists().filter { $0.name != LocalLibrary.watchLater } }
             Task { await loadAccountLists() }

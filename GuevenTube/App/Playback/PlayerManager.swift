@@ -82,7 +82,8 @@ final class PlayerManager: ObservableObject {
             p.source = alt.source; p.qualityLabel = alt.label; p.hlsFallbackUrl = nil; p.ladder = []
             alternatives.append(p)
         }
-        start(first, startAtMs: startAtMs, info: info, full: true)
+        diagnosedOnce = false
+        start(first, startAtMs: startAtMs, info: info)
     }
 
     /// Weitere Wege, falls der erste fehlschlägt oder nicht rechtzeitig startet (HLS/Zusammensetzen, dann schlechtere Stufen).
@@ -96,7 +97,7 @@ final class PlayerManager: ObservableObject {
     /// Rückgabe `true` = der Aufrufer startet neu, kein Fehler anzeigen.
     var onRouteRejected: ((_ routeLabel: String, _ status: Int) -> Bool)?
 
-    private func start(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?, full: Bool = false) {
+    private func start(_ plan: PlaybackPlan, startAtMs: Int64, info: NowPlaying?) {
         loadTask?.cancel()
         watchdog?.cancel()
         startGeneration += 1
@@ -105,23 +106,15 @@ final class PlayerManager: ObservableObject {
         self.info = info
         state = .loading
         positionMs = startAtMs
+        // Schneller Weg: sofort abspielen. Die Adress-Probe (Status, Tempo, Dateikopf) läuft nur noch nach einem Fehler.
         loadTask = Task { [weak self] in
             do {
-                // Vorab ein kurzer Test der Adresse: zeigt Status/Tempo/Dateikopf und spart bei 403 & Co. die Wartezeit.
-                let probes = await Self.probe(plan, full: full)
-                guard !Task.isCancelled, let self else { return }
-                self.diag.append(contentsOf: probes.lines)
-                if let bad = probes.badStatus {
-                    throw NSError(domain: "GuevenTube", code: bad, userInfo: [NSLocalizedDescriptionKey: "Server verweigert den Strom (HTTP \(bad))"])
-                }
-                var usable = plan
-                if !probes.headers.isEmpty { usable.extraHeaders = probes.headers }
-                let item = try await Self.makeItem(for: usable)
-                guard !Task.isCancelled else { return }
-                self.attach(item, startAtMs: startAtMs)
+                let item = try await Self.makeItem(for: plan)
+                guard !Task.isCancelled, let self, self.startGeneration == generation else { return }
+                self.attach(item, startAtMs: startAtMs, generation: generation)
             } catch is CancellationError {
             } catch {
-                self?.fallbackOrFail(startAtMs: startAtMs, info: info, error: error)
+                self?.recover(startAtMs: startAtMs, info: info, error: error, generation: generation)
             }
         }
         // Ein Weg, der nie fertig wird, darf nicht ewig den Ladekreis zeigen.
@@ -129,8 +122,29 @@ final class PlayerManager: ObservableObject {
         watchdog = Task { [weak self] in
             try? await Task.sleep(nanoseconds: limitSeconds * 1_000_000_000)
             guard !Task.isCancelled, let self, self.startGeneration == generation, self.state == .loading else { return }
-            self.fallbackOrFail(startAtMs: startAtMs, info: info,
-                                error: NSError(domain: "GuevenTube", code: 1, userInfo: [NSLocalizedDescriptionKey: "Zeitüberschreitung: Das Video startet nicht."]))
+            self.recover(startAtMs: startAtMs, info: info, generation: generation,
+                         error: NSError(domain: "GuevenTube", code: 1, userInfo: [NSLocalizedDescriptionKey: "Zeitüberschreitung: Das Video startet nicht."]))
+        }
+    }
+
+    private var recoveringGeneration = -1
+    private var diagnosedOnce = false
+
+    /// Nach einem Fehler erst messen, was der Videoserver sagt (HTTP-Status), dann Notweg oder Fehleranzeige.
+    private func recover(startAtMs: Int64, info: NowPlaying?, error: Error?, generation: Int) {
+        guard generation == startGeneration, recoveringGeneration != generation, let failed = plan else { return }
+        recoveringGeneration = generation
+        let full = !diagnosedOnce
+        diagnosedOnce = true
+        Task { [weak self] in
+            let probes = await Self.probe(failed, full: full)
+            guard let self, generation == self.startGeneration else { return }
+            self.diag.append(contentsOf: probes.lines)
+            var reason = error
+            if let bad = probes.badStatus {
+                reason = NSError(domain: "GuevenTube", code: bad, userInfo: [NSLocalizedDescriptionKey: "Server verweigert den Strom (HTTP \(bad))"])
+            }
+            self.fallbackOrFail(startAtMs: startAtMs, info: info, error: reason)
         }
     }
 
@@ -177,7 +191,7 @@ final class PlayerManager: ObservableObject {
                 c.queryItems = (c.queryItems ?? []) + [URLQueryItem(name: "range", value: "0-131071")]
                 u = c.url ?? url
             }
-            var r = URLRequest(url: u); r.timeoutInterval = 10
+            var r = URLRequest(url: u); r.timeoutInterval = 6
             r.setValue(plan.userAgent, forHTTPHeaderField: "User-Agent")
             if !v.rangeParam { r.setValue("bytes=0-131071", forHTTPHeaderField: "Range") }
             for (k, val) in v.headers { r.setValue(val, forHTTPHeaderField: k) }
@@ -264,7 +278,8 @@ final class PlayerManager: ObservableObject {
     // MARK: Item-Bau
 
     nonisolated static func headers(for plan: PlaybackPlan) -> [String: String] {
-        var h = ["User-Agent": plan.userAgent]
+        // Origin/Referer wie die erste (und bei dir erfolgreiche) Variante der früheren Vorab-Probe: Der Videoserver nahm den Ton nur damit an.
+        var h = ["User-Agent": plan.userAgent, "Origin": HTTPConstants.youtubeOrigin, "Referer": HTTPConstants.youtubeOrigin + "/"]
         for (k, v) in plan.extraHeaders { h[k] = v }
         return h
     }
@@ -304,7 +319,7 @@ final class PlayerManager: ObservableObject {
         }
     }
 
-    private func attach(_ item: AVPlayerItem, startAtMs: Int64) {
+    private func attach(_ item: AVPlayerItem, startAtMs: Int64, generation: Int) {
         itemObservers.removeAll()
         if let h = hlsMaxHeight { item.preferredMaximumResolution = CGSize(width: Double(h) * 16 / 9, height: Double(h)) }
         item.publisher(for: \.status).receive(on: DispatchQueue.main).sink { [weak self] status in
@@ -319,7 +334,7 @@ final class PlayerManager: ObservableObject {
                 self.state = .playing
                 self.publishNowPlaying()
             case .failed:
-                self.fallbackOrFail(startAtMs: startAtMs, info: self.info, error: item.error)
+                self.recover(startAtMs: startAtMs, info: self.info, error: item.error, generation: generation)
             default: break
             }
         }.store(in: &itemObservers)
