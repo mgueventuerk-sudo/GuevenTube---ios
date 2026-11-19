@@ -126,10 +126,24 @@ final class AppModel: ObservableObject {
         return true
     }
 
+    /// Deutscher Satz zu bekannten Gründen (steht über den technischen Zeilen), sonst `nil`.
+    static func hint(for message: String) -> String? {
+        let m = message.lowercased()
+        if m.contains("requires payment") {
+            return "Dieser Film ist bei YouTube kostenpflichtig (Kauf oder Leihe) und lässt sich in der App nicht abspielen. Wähle ein anderes Video."
+        }
+        if m.contains("unavailable") {
+            return "Dieses Video ist bei YouTube nicht (mehr) verfügbar. Wähle ein anderes Video."
+        }
+        return nil
+    }
+
     /// Lesbare Fehlermeldung samt den versuchten Wegen, damit ein Screenshot die Ursache zeigt.
     static func describe(_ error: Error) -> String {
         if let e = error as? PlaybackUnavailableError {
-            return ([e.message] + e.attempts.map { $0.displayLine() }).joined(separator: "\n")
+            let details = ([e.message] + e.attempts.map { $0.displayLine() }).joined(separator: "\n")
+            guard let hint = hint(for: e.message) else { return details }
+            return hint + "\n\nTechnische Details:\n" + details
         }
         if let e = error as? PlaybackPlanError { return e.message }
         let ns = error as NSError
