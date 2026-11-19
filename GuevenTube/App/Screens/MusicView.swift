@@ -47,25 +47,146 @@ struct MusicView: View {
     }
 }
 
-/// Kleine Steuerleiste unten, solange ein Titel läuft.
+/// Symbol der Play-Taste: zeigt den echten Zustand (Laden, Pause-Symbol beim Spielen, sonst Play).
+struct PlayPauseIcon: View {
+    let state: PlayerManager.State
+    var body: some View {
+        switch state {
+        case .loading: ProgressView()
+        case .playing: Image(systemName: "pause.fill")
+        default: Image(systemName: "play.fill")
+        }
+    }
+}
+
+/// Kleine Steuerleiste unten, solange ein Titel läuft. Antippen öffnet den großen Player.
 struct MiniPlayer: View {
     @EnvironmentObject var music: MusicModel
     @EnvironmentObject var app: AppModel
+    @State private var showFull = false
 
     var body: some View {
-        if let song = music.queue.current {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(song.title).font(.subheadline).lineLimit(1)
-                    Text(song.artists ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer()
-                Button { music.previous() } label: { Image(systemName: "backward.fill") }
-                Button { app.player.toggle() } label: { Image(systemName: app.player.state == .playing ? "pause.fill" : "play.fill") }
-                Button { music.next() } label: { Image(systemName: "forward.fill") }
+        Group {
+            if let song = music.queue.current {
+                // Der Player ist ein eigenes ObservableObject: nur so zeichnet sich die Leiste bei Zustandswechseln neu.
+                MiniPlayerBar(song: song, player: app.player) { showFull = true }
             }
-            .padding().background(.regularMaterial)
         }
+        .sheet(isPresented: $showFull) {
+            NowPlayingView(player: app.player).environmentObject(music).environmentObject(app)
+        }
+    }
+}
+
+private struct MiniPlayerBar: View {
+    let song: MusicSong
+    @ObservedObject var player: PlayerManager
+    @EnvironmentObject var music: MusicModel
+    let onOpen: () -> Void
+
+    init(song: MusicSong, player: PlayerManager, onOpen: @escaping () -> Void) {
+        self.song = song; self._player = ObservedObject(wrappedValue: player); self.onOpen = onOpen
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ProgressView(value: min(1, Double(player.positionMs) / Double(max(1, player.durationMs))))
+                .tint(GT.accent).scaleEffect(x: 1, y: 0.5)
+            HStack(spacing: 4) {
+                Button(action: onOpen) {
+                    HStack(spacing: 10) {
+                        AsyncImage(url: URL(string: song.thumbnailUrl ?? "")) { $0.resizable().scaledToFill() } placeholder: { GT.surface }
+                            .frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 6))
+                        VStack(alignment: .leading) {
+                            Text(song.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            Text(song.artists ?? "").font(.caption).foregroundStyle(GT.secondaryText).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }.contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel("Player öffnen")
+                control("backward.fill", "Vorheriger Titel") { music.previous() }
+                Button { player.toggle() } label: { PlayPauseIcon(state: player.state).font(.title2).frame(width: 44, height: 44) }
+                    .accessibilityLabel(player.state == .playing ? "Pause" : "Abspielen")
+                control("forward.fill", "Nächster Titel") { music.next() }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+        }
+        .tint(GT.accent).background(.regularMaterial)
+    }
+
+    private func control(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: icon).frame(width: 40, height: 44) }.accessibilityLabel(label)
+    }
+}
+
+/// Großer Player: Cover, Titel, Fortschritt, Steuerung, Zufall und Wiederholen.
+struct NowPlayingView: View {
+    @ObservedObject var player: PlayerManager
+    @EnvironmentObject var music: MusicModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var scrubbing: Double?
+
+    init(player: PlayerManager) { self._player = ObservedObject(wrappedValue: player) }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }
+                .frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Schließen")
+            if let song = music.queue.current {
+                AsyncImage(url: URL(string: song.thumbnailUrl ?? "")) { $0.resizable().scaledToFill() } placeholder: { GT.surface }
+                    .aspectRatio(1, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 12)).frame(maxHeight: 340)
+                VStack(spacing: 4) {
+                    Text(song.title).font(.title3.weight(.bold)).multilineTextAlignment(.center).lineLimit(2)
+                    Text(song.artists ?? "").foregroundStyle(GT.secondaryText).lineLimit(1)
+                }
+                if case .failed = player.state {
+                    Text("Der Titel lässt sich nicht abspielen. Tippe auf „Nächster Titel“ oder versuche es später erneut.")
+                        .font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
+                }
+                progress
+                controls
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24).padding(.bottom, 16)
+        .tint(GT.accent)
+    }
+
+    private var progress: some View {
+        let total = Double(max(1, player.durationMs))
+        return VStack(spacing: 2) {
+            Slider(value: Binding(get: { scrubbing ?? Double(player.positionMs) }, set: { scrubbing = $0 }), in: 0...total) { editing in
+                if !editing, let s = scrubbing { player.seek(toMs: Int64(s)); scrubbing = nil }
+            }.disabled(player.durationMs <= 0).accessibilityLabel("Position")
+            HStack {
+                Text(Self.time(scrubbing ?? Double(player.positionMs)))
+                Spacer()
+                Text(Self.time(Double(player.durationMs)))
+            }.font(.caption.monospacedDigit()).foregroundStyle(GT.secondaryText)
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 0) {
+            Button { music.toggleShuffle() } label: {
+                Image(systemName: "shuffle").foregroundStyle(music.queue.shuffle ? GT.accent : GT.secondaryText).frame(maxWidth: .infinity, minHeight: 56)
+            }.accessibilityLabel(music.queue.shuffle ? "Zufall aus" : "Zufall an")
+            Button { music.previous() } label: { Image(systemName: "backward.fill").font(.title2).frame(maxWidth: .infinity, minHeight: 56) }
+                .accessibilityLabel("Vorheriger Titel")
+            Button { player.toggle() } label: { PlayPauseIcon(state: player.state).font(.system(size: 40)).frame(maxWidth: .infinity, minHeight: 64) }
+                .accessibilityLabel(player.state == .playing ? "Pause" : "Abspielen")
+            Button { music.next() } label: { Image(systemName: "forward.fill").font(.title2).frame(maxWidth: .infinity, minHeight: 56) }
+                .accessibilityLabel("Nächster Titel")
+            Button { music.cycleRepeat() } label: {
+                Image(systemName: music.queue.repeatMode == .one ? "repeat.1" : "repeat")
+                    .foregroundStyle(music.queue.repeatMode == .off ? GT.secondaryText : GT.accent).frame(maxWidth: .infinity, minHeight: 56)
+            }.accessibilityLabel("Wiederholen")
+        }.foregroundStyle(.primary)
+    }
+
+    static func time(_ ms: Double) -> String {
+        let s = max(0, Int(ms / 1000))
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 }
 
