@@ -38,6 +38,7 @@ targets:
         NSLocalNetworkUsageDescription: GuevenTube sucht Fernseher mit GuevenTube im WLAN, um sie als Fernbedienung zu steuern.
         NSBonjourServices: [_gueventube._tcp]
         NSFaceIDUsageDescription: Face ID entsperrt Konto und Einstellungen.
+        NSPhotoLibraryAddUsageDescription: GuevenTube legt heruntergeladene Videos in deiner Fotos-Mediathek ab.
         NSCameraUsageDescription: Die Kamera liest den QR-Code zum Koppeln mit dem Fernseher.
     settings:
       base:

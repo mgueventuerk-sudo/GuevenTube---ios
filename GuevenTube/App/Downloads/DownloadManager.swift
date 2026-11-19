@@ -1,6 +1,7 @@
 #if canImport(AVFoundation)
 import Foundation
 import AVFoundation
+import UIKit
 import GuevenCore
 
 /// Führt Downloads mit einer Hintergrund-`URLSession` aus (`DownloadScheduling`). Bild und Ton werden getrennt geladen und
@@ -175,11 +176,20 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
             let size = (try? fm.attributesOfItem(atPath: out.path)[.size] as? Int64) ?? 0
             await store.setDone(id, location: out.lastPathComponent, bytes: size, now: Self.now())
             try? fm.removeItem(at: dir)
+            if needsVideo { await saveToPhotos(out) }
         } catch {
             try? fm.removeItem(at: out) // halb geschriebene Ausgabedatei nicht liegen lassen
             await store.setFailed(id, message: "Zusammenfügen fehlgeschlagen: \(error.localizedDescription)", now: Self.now())
         }
     }
+
+    /// Legt fertige Videos zusätzlich in die Fotos-App (Add-only-Berechtigung). Die Datei in „Dateien“ bleibt bestehen; Ton (m4a)
+    /// kennt die Galerie nicht. Eine verweigerte Berechtigung lässt den Download selbst unberührt.
+    @MainActor private func saveToPhotos(_ url: URL) {
+        guard UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(url.path) else { return }
+        UISaveVideoAtPathToSavedPhotosAlbum(url.path, self, #selector(photosSaveFinished(_:didFinishSavingWithError:contextInfo:)), nil)
+    }
+    @objc private func photosSaveFinished(_ path: String, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer?) {}
 
     private func uniqueURL(_ url: URL) -> URL {
         var candidate = url, n = 1
