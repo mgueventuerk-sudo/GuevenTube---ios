@@ -25,6 +25,8 @@ struct GuevenTubeApp: App {
         Task { await AppEnvironment.shared.downloads.resumePending() }
         // Der PO-Token-Generator braucht ein Fenster: kurz nach dem Start im Hintergrund vorbauen.
         Task { try? await Task.sleep(nanoseconds: 2_000_000_000); await AppEnvironment.shared.poTokens.warmUp() }
+        // Player-Skript laden und analysieren, bevor das erste Video startet.
+        Task { try? await Task.sleep(nanoseconds: 1_000_000_000); await AppEnvironment.shared.resolver.warmUp() }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
     }
 

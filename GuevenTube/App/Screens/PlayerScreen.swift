@@ -168,7 +168,7 @@ struct PlayerScreen: View {
                 if let v = app.current {
                     PlayerContent(
                         isLandscape: landscape, video: v, hasCaptions: !app.captions.isEmpty,
-                        qualityText: player.plan.map { $0.qualityLabel + ($0.throttled ? " · gedrosselt" : "") },
+                        qualityText: player.plan.map { $0.qualityLabel + ($0.throttled ? " · gedrosselt" : "") + (player.startTiming.map { " · " + $0 } ?? "") },
                         errorText: errorText, isLoading: { if case .loading = player.state { return true } else { return false } }(),
                         skipLabel: app.skipPrompt.map { "\($0.category.displayName) überspringen" },
                         actions: PlayerActions(

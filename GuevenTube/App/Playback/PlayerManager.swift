@@ -21,6 +21,10 @@ final class PlayerManager: ObservableObject {
     @Published private(set) var positionMs: Int64 = 0
     @Published private(set) var durationMs: Int64 = 0
     @Published private(set) var plan: PlaybackPlan?
+    /// Messwert des letzten Starts („Auflösung X ms · Start Y ms“), im Player sichtbar, damit Tempo prüfbar ist.
+    @Published private(set) var startTiming: String?
+    private var startedAt = Date()
+    private var lastResolveMs = 0
     /// Wird ca. 4-mal pro Sekunde mit der Position aufgerufen (SponsorBlock).
     var onPosition: ((Int64) -> Void)?
 
@@ -53,7 +57,8 @@ final class PlayerManager: ObservableObject {
 
     // MARK: Steuerung
 
-    func play(_ plan: PlaybackPlan, startAtMs: Int64 = 0, info: NowPlaying? = nil, resolveNote: String? = nil) {
+    func play(_ plan: PlaybackPlan, startAtMs: Int64 = 0, info: NowPlaying? = nil, resolveNote: String? = nil, resolveMs: Int = 0) {
+        startedAt = Date(); lastResolveMs = resolveMs; startTiming = nil
         // Ohne aktive Sitzung bricht die Wiedergabe im Hintergrund und bei gesperrtem Bildschirm ab.
         try? AVAudioSession.sharedInstance().setActive(true)
         alternatives = []
@@ -333,6 +338,9 @@ final class PlayerManager: ObservableObject {
                 if startAtMs > 0 { self.seek(toMs: startAtMs) }
                 self.player.play()
                 self.state = .playing
+                if self.startTiming == nil {
+                    self.startTiming = "Auflösung \(self.lastResolveMs) ms · Start \(Int(Date().timeIntervalSince(self.startedAt) * 1000)) ms"
+                }
                 self.publishNowPlaying()
             case .failed:
                 self.recover(startAtMs: startAtMs, info: self.info, error: item.error, generation: generation)

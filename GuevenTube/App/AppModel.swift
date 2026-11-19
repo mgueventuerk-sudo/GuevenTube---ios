@@ -85,6 +85,7 @@ final class AppModel: ObservableObject {
                 let settings = await env.settings.current()
                 let t0 = Date()
                 let resolved = try await env.resolver.resolve(item.videoId)
+                let resolveMs = Int(Date().timeIntervalSince(t0) * 1000)
                 let potStatus = await env.poTokens.status
                 let tried = resolved.attempts.map { $0.displayLine() }.joined(separator: "\n")
                 // Nach einem abgelehnten Weg: bisherige Messwerte vorne anhängen, damit ein Fehler alle Wege zeigt.
@@ -104,7 +105,7 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
                 player.setRate(settings.defaultPlaybackSpeed)
                 player.play(plan, startAtMs: resume, info: .init(title: item.title, artist: item.channelName ?? "",
-                                              artworkUrl: URL(string: item.thumbnailUrl)), resolveNote: resolveNote)
+                                              artworkUrl: URL(string: item.thumbnailUrl)), resolveNote: resolveNote, resolveMs: resolveMs)
             } catch is CancellationError {
             } catch {
                 playbackError = Self.describe(error)

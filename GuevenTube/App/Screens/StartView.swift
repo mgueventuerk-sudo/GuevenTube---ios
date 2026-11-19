@@ -34,6 +34,10 @@ struct StartView: View {
             let page = InnerTubeParser.parseFeed(json, defaultShelfTitle: "Empfohlen")
             shelves = page.shelves
             error = page.shelves.isEmpty ? "Keine Videos erhalten." : nil
+            // Die ersten Videos im Hintergrund auflösen: der Tipp darauf startet dann ohne Wartezeit für die Auflösung.
+            let firstIds = page.shelves.flatMap(\.items).prefix(2).map(\.videoId)
+            let resolver = app.env.resolver
+            Task { for id in firstIds { _ = await resolver.prefetch(id) } }
         } catch {
             self.error = GTError.text(error)
         }

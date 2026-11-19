@@ -31,6 +31,8 @@ final class FakeSolver: ChallengeSolving, @unchecked Sendable {
     var sigMap: [String: String] = [:]
     var failWith: String?
     private(set) var solveCalls = 0
+    private(set) var warmedPlayerIds: [String] = []
+    func warmUp(playerId: String) async { warmedPlayerIds.append(playerId) }
     func isAvailable() async -> Bool { available }
     func status() async -> String { available ? "bereit" : "nicht verfügbar" }
     func solve(playerId: String, nChallenges: Set<String>, sigChallenges: Set<String>) async throws -> SolvedChallenges {
@@ -99,6 +101,14 @@ final class StreamResolverTests: XCTestCase {
         let resolver = StreamResolver(endpoint: endpoint, registry: FakeRegistry(), solver: solver, scripts: scripts, poTokens: FixedPoTokens(token: poToken),
                                       health: RouteHealth(store: store) { clock.now }, timings: timings, nowMs: { clock.now })
         return Setup(resolver: resolver, endpoint: endpoint, solver: solver, scripts: scripts, clock: clock, store: store)
+    }
+
+    func testWarmUpLoadsPlayerScriptAndAnalysesItWithoutResolvingAnyVideo() async {
+        let s = make({ _, _, _, _ in XCTFail("Vorwärmen darf kein Video anfragen"); return self.unplayable("ERROR", "x") })
+        await s.resolver.warmUp()
+        XCTAssertEqual(s.scripts.stsCalls, 1)
+        XCTAssertEqual(s.solver.warmedPlayerIds, ["abcd1234"])
+        XCTAssertEqual(s.solver.solveCalls, 0)
     }
 
     func testJsFreeRouteWinsWithoutPlayerScriptAndAppendsPoToken() async throws {

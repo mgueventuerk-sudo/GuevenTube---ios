@@ -28,6 +28,12 @@ public protocol ChallengeSolving: Sendable {
     func isAvailable() async -> Bool
     func status() async -> String
     func solve(playerId: String, nChallenges: Set<String>, sigChallenges: Set<String>) async throws -> SolvedChallenges
+    /// Analysiert das Player-Skript vorab (Standard: nichts tun).
+    func warmUp(playerId: String) async
+}
+
+public extension ChallengeSolving {
+    func warmUp(playerId: String) async {}
 }
 
 public struct SolverError: Error { public let message: String; public init(_ m: String) { message = m } }
@@ -171,6 +177,14 @@ public actor StreamResolver {
     public func resolve(_ videoId: String, forceRefresh: Bool = false, trackAsLastRequested: Bool = true) async throws -> ResolvedPlayback {
         if trackAsLastRequested { lastRequestedVideoId = videoId }
         return try await resolveShared(videoId, forceRefresh: forceRefresh)
+    }
+
+    /// Beim App-Start: Player-Skript laden und analysieren. Die Analyse ist auf dem iPhone langsam (JavaScriptCore ohne JIT)
+    /// und fiel bisher in die erste Wiedergabe. Fehler werden verschluckt, die Wiedergabe löst dann wie bisher auf.
+    public func warmUp() async {
+        guard let id = try? await scripts.currentPlayerId() else { return }
+        _ = try? await scripts.signatureTimestamp(playerId: id)
+        await solver.warmUp(playerId: id)
     }
 
     /// Noch gültiges Ergebnis aus dem Speicher, ohne Netzwerk.
