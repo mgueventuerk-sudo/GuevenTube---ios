@@ -24,6 +24,9 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
         let c = URLSessionConfiguration.background(withIdentifier: Self.sessionId)
         c.isDiscretionary = false
         c.sessionSendsLaunchEvents = true
+        // Wie die Wiedergabe und die Android-App: ohne Cookies (sonst kann der Videoserver Anfragen anders bewerten).
+        c.httpShouldSetCookies = false
+        c.httpCookieStorage = nil
         return URLSession(configuration: c, delegate: self, delegateQueue: nil)
     }()
 
@@ -66,14 +69,23 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
             await store.setProgress(downloadId, percent: 0, downloadedBytes: 0, totalBytes: nil, bytesPerSecond: 0,
                                     stage: formats.videoFormat == nil ? "Ton wird geladen" : "Bild und Ton werden geladen", now: Self.now())
         } catch {
-            await store.setFailed(downloadId, message: String(describing: error), now: Self.now())
+            await fail(downloadId, (error as? PlaybackUnavailableError)?.message ?? error.localizedDescription)
         }
+    }
+
+    /// Fehler eintragen und den zweiten Teil (Bild/Ton) stoppen: Er würde sonst unnütz Daten laden.
+    private func fail(_ id: Int64, _ message: String) async {
+        await store.setFailed(id, message: message, now: Self.now())
+        for task in await session.allTasks where info(task)?.id == id { task.cancel() }
     }
 
     private func start(_ format: StreamFormat, role: String, id: Int64, ua: String) throws {
         guard let s = format.url, let url = URL(string: s) else { throw DownloadStartError.noURL }
         var req = URLRequest(url: url)
         req.setValue(ua, forHTTPHeaderField: "User-Agent")
+        // Origin/Referer wie bei der Wiedergabe: Der Videoserver nahm Anfragen ohne sie teils nicht an.
+        req.setValue(HTTPConstants.youtubeOrigin, forHTTPHeaderField: "Origin")
+        req.setValue(HTTPConstants.youtubeOrigin + "/", forHTTPHeaderField: "Referer")
         let task = session.downloadTask(with: req)
         task.taskDescription = "\(id)|\(role)|\(format.mimeType.contains("audio") ? "m4a" : "mp4")"
         task.resume()
@@ -116,14 +128,14 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let t = info(downloadTask) else { return }
         if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            Task { await store.setFailed(t.id, message: "HTTP \(http.statusCode)", now: Self.now()) }
+            Task { await fail(t.id, "Der Videoserver hat den Download abgelehnt (HTTP \(http.statusCode)). Versuche es später erneut.") }
             return
         }
         // Die temporäre Datei verschwindet nach diesem Aufruf: sofort in den Zwischenordner verschieben.
         let dest = staging(t.id).appendingPathComponent("\(t.role).\(t.ext)")
         try? fm.removeItem(at: dest)
         do { try fm.moveItem(at: location, to: dest) } catch {
-            Task { await store.setFailed(t.id, message: "Datei nicht speicherbar: \(error.localizedDescription)", now: Self.now()) }
+            Task { await fail(t.id, "Datei nicht speicherbar: \(error.localizedDescription)") }
         }
     }
 
@@ -131,7 +143,7 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
         guard let t = info(task) else { return }
         if let error {
             if (error as? URLError)?.code == .cancelled { return }
-            Task { await store.setFailed(t.id, message: error.localizedDescription, now: Self.now()) }
+            Task { await fail(t.id, error.localizedDescription) }
             return
         }
         Task { await finalizeIfComplete(t.id) }
@@ -164,6 +176,7 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
             await store.setDone(id, location: out.lastPathComponent, bytes: size, now: Self.now())
             try? fm.removeItem(at: dir)
         } catch {
+            try? fm.removeItem(at: out) // halb geschriebene Ausgabedatei nicht liegen lassen
             await store.setFailed(id, message: "Zusammenfügen fehlgeschlagen: \(error.localizedDescription)", now: Self.now())
         }
     }

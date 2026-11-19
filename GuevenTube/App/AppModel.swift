@@ -68,6 +68,8 @@ final class AppModel: ObservableObject {
     func play(_ item: VideoItem, audioOnly: Bool = false, showPlayer: Bool = true, keepQueue: Bool = false, startAtMs: Int64? = nil, isRouteRetry: Bool = false) {
         task?.cancel()
         if !isRouteRetry {
+            // Beim Wechsel mitten im Video den Fortschritt des bisherigen sichern (sonst nur der Stand bis zu 10 s davor).
+            if current != nil { saveProgress(player.positionMs, force: true) }
             routeRetries = 0
             if !keepQueue { queue = []; queueRemaining = 0 }
             autoplayAllowed = !audioOnly && !keepQueue

@@ -122,8 +122,9 @@ final class PlayerManager: ObservableObject {
         watchdog = Task { [weak self] in
             try? await Task.sleep(nanoseconds: limitSeconds * 1_000_000_000)
             guard !Task.isCancelled, let self, self.startGeneration == generation, self.state == .loading else { return }
-            self.recover(startAtMs: startAtMs, info: info, generation: generation,
-                         error: NSError(domain: "GuevenTube", code: 1, userInfo: [NSLocalizedDescriptionKey: "Zeitüberschreitung: Das Video startet nicht."]))
+            self.recover(startAtMs: startAtMs, info: info,
+                         error: NSError(domain: "GuevenTube", code: 1, userInfo: [NSLocalizedDescriptionKey: "Zeitüberschreitung: Das Video startet nicht."]),
+                         generation: generation)
         }
     }
 

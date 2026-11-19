@@ -96,7 +96,9 @@ struct PlaylistDetailView: View {
 /// Menü „Zu Playlist“ im Player; legt auf Wunsch eine neue Liste an.
 struct AddToPlaylistMenu<MenuLabel: View>: View {
     let video: VideoItem
-    @ViewBuilder var label: MenuLabel
+    private let label: MenuLabel
+
+    init(video: VideoItem, @ViewBuilder label: () -> MenuLabel) { self.video = video; self.label = label() }
     @State private var lists: [LocalPlaylistWithCount] = []
     @State private var showNew = false
     @State private var newName = ""

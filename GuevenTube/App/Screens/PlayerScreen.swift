@@ -45,9 +45,17 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
     let isLoading: Bool
     let skipLabel: String?
     let actions: PlayerActions
-    @ViewBuilder var surface: Surface
-    @ViewBuilder var playlistMenu: Playlist
-    @ViewBuilder var downloadMenu: Download
+    let surface: Surface
+    let playlistMenu: Playlist
+    let downloadMenu: Download
+
+    init(isLandscape: Bool, video: VideoItem, hasCaptions: Bool, qualityText: String?, errorText: String?, isLoading: Bool,
+         skipLabel: String?, actions: PlayerActions,
+         @ViewBuilder surface: () -> Surface, @ViewBuilder playlistMenu: () -> Playlist, @ViewBuilder downloadMenu: () -> Download) {
+        self.isLandscape = isLandscape; self.video = video; self.hasCaptions = hasCaptions; self.qualityText = qualityText
+        self.errorText = errorText; self.isLoading = isLoading; self.skipLabel = skipLabel; self.actions = actions
+        self.surface = surface(); self.playlistMenu = playlistMenu(); self.downloadMenu = downloadMenu()
+    }
 
     var body: some View {
         Group {
