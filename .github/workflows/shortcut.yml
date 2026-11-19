@@ -1,0 +1,16 @@
+name: SideStore-Kurzbefehl
+on: workflow_dispatch
+jobs:
+  sign:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/shortcut/make.py /tmp/unsigned.shortcut
+      - name: Signieren
+        run: |
+          mkdir -p out
+          shortcuts sign -m anyone -i /tmp/unsigned.shortcut -o out/SideStore-Refresh.shortcut || \
+          shortcuts sign -m people-who-know-me -i /tmp/unsigned.shortcut -o out/SideStore-Refresh.shortcut
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with: { name: SideStore-Kurzbefehl, path: out/ }
