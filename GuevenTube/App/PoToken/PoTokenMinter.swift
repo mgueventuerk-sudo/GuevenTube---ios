@@ -2,7 +2,7 @@ import Foundation
 import GuevenCore
 
 /// Verwaltet den BotGuard-Generator (Port von `PoTokenMinter.kt`):
-/// - erst bei Bedarf erzeugt (oder per [warmUp] beim Start), nach [idleRelease] ohne Nutzung wieder freigegeben,
+/// - erst bei Bedarf erzeugt (oder per [warmUp] beim Start), nach [idleRelease] (20 Minuten) ohne Nutzung wieder freigegeben,
 /// - neu erzeugt, wenn der Integritäts-Token abläuft oder ein Prägen scheitert (einmal),
 /// - nach wiederholten Fehlschlägen [pause] lang aus,
 /// - jede Anfrage höchstens [timeout]; danach `nil` → die App verhält sich wie ohne Token.
@@ -18,7 +18,7 @@ actor PoTokenMinter: PoTokenProviding {
     private(set) var status = "noch nicht benutzt"
 
     private let timeout: TimeInterval = 15
-    private let idleRelease: TimeInterval = 120
+    private let idleRelease: TimeInterval = 20 * 60
     private let maxFailures = 2
     private let pause: TimeInterval = 10 * 60
 
