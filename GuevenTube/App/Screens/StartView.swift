@@ -23,7 +23,12 @@ struct StartView: View {
             .overlay { if loading && shelves.isEmpty { ProgressView() } }
             .navigationTitle("Start")
             .refreshable { await load() }
-            .task { if shelves.isEmpty { await load() } }
+            .task {
+                guard shelves.isEmpty else { return }
+                // Zuletzt gesehene Startseite sofort zeigen (Lesen abseits des Hauptthreads), dann aktualisieren.
+                if let cached = await Task.detached(operation: { FeedDiskCache.load() }).value, shelves.isEmpty { shelves = cached }
+                await load()
+            }
         }
     }
 
@@ -33,6 +38,8 @@ struct StartView: View {
             let json = try await app.env.innerTube.browse(browseId: "default")
             let page = InnerTubeParser.parseFeed(json, defaultShelfTitle: "Empfohlen")
             shelves = page.shelves
+            let toSave = page
+            Task.detached { FeedDiskCache.save(toSave) }
             error = page.shelves.isEmpty ? "Keine Videos erhalten." : nil
             // Die ersten Videos im Hintergrund auflösen: der Tipp darauf startet dann ohne Wartezeit für die Auflösung.
             let firstIds = page.shelves.flatMap(\.items).prefix(2).map(\.videoId)

@@ -73,7 +73,7 @@ public struct ResolverTimings: Sendable {
     /// Warm (Skript/Solver geladen): Fehlermeldung spätestens nach 15 s.
     public var warmTotalTimeoutMs: Int64 = 15_000
     /// Antwortet ein Weg so lange nicht, startet der nächste parallel.
-    public var hedgeDelayMs: Int64 = 3_000
+    public var hedgeDelayMs: Int64 = 1_500
     /// Mindestzeit für den zweiten Durchlauf mit erzeugtem poToken.
     public var minRetryMs: Int64 = 4_000
     public var minSecondPassMs: Int64 = 2_000

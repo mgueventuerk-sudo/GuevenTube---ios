@@ -87,17 +87,31 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
         // Origin/Referer wie bei der Wiedergabe: Der Videoserver nahm Anfragen ohne sie teils nicht an.
         req.setValue(HTTPConstants.youtubeOrigin, forHTTPHeaderField: "Origin")
         req.setValue(HTTPConstants.youtubeOrigin + "/", forHTTPHeaderField: "Referer")
+        let ext = format.mimeType.contains("audio") ? "m4a" : "mp4"
+        // Große Dateien in Stücken laden: Vollabrufe werden vom Videoserver gedrosselt.
+        let total = DownloadChunking.shouldChunk(total: format.contentLength) ? (format.contentLength ?? 0) : 0
+        enqueue(req, id: id, role: role, ext: ext, offset: 0, total: total)
+    }
+
+    /// Startet einen Abruf; bei [total] > 0 nur das Stück ab [offset]. Der Zustand steckt in `taskDescription`
+    /// (id|Rolle|Endung|Start|Gesamtgröße), damit er auch nach einem Neustart der App im Hintergrund erhalten bleibt.
+    private func enqueue(_ base: URLRequest, id: Int64, role: String, ext: String, offset: Int64, total: Int64) {
+        var req = base
+        if total > 0, let r = DownloadChunking.range(offset: offset, total: total) {
+            req.setValue("bytes=\(r.start)-\(r.end)", forHTTPHeaderField: "Range")
+        }
         let task = session.downloadTask(with: req)
-        task.taskDescription = "\(id)|\(role)|\(format.mimeType.contains("audio") ? "m4a" : "mp4")"
+        task.taskDescription = "\(id)|\(role)|\(ext)|\(offset)|\(total)"
         task.resume()
     }
     enum DownloadStartError: Error { case noURL }
 
     private static func now() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
-    private func info(_ task: URLSessionTask) -> (id: Int64, role: String, ext: String)? {
+    private func info(_ task: URLSessionTask) -> (id: Int64, role: String, ext: String, offset: Int64, total: Int64)? {
         let p = (task.taskDescription ?? "").split(separator: "|").map(String.init)
-        guard p.count == 3, let id = Int64(p[0]) else { return nil }
-        return (id, p[1], p[2])
+        guard p.count == 3 || p.count == 5, let id = Int64(p[0]) else { return nil }
+        if p.count == 3 { return (id, p[1], p[2], 0, 0) }   // Abruf aus einer älteren Version: ganze Datei
+        return (id, p[1], p[2], Int64(p[3]) ?? 0, Int64(p[4]) ?? 0)
     }
 
     // MARK: URLSessionDownloadDelegate
@@ -106,7 +120,7 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
                     totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard let t = info(downloadTask) else { return }
         let (written, total, speed): (Int64, Int64, Int64) = lock.withLock {
-            parts[t.id, default: [:]][t.role] = (totalBytesWritten, totalBytesExpectedToWrite)
+            parts[t.id, default: [:]][t.role] = (t.offset + totalBytesWritten, t.total > 0 ? t.total : totalBytesExpectedToWrite)
             let all = parts[t.id] ?? [:]
             let w = all.values.reduce(0) { $0 + $1.written }
             let tot = all.values.allSatisfy { $0.total > 0 } ? all.values.reduce(0) { $0 + $1.total } : 0
@@ -134,10 +148,49 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
         }
         // Die temporäre Datei verschwindet nach diesem Aufruf: sofort in den Zwischenordner verschieben.
         let dest = staging(t.id).appendingPathComponent("\(t.role).\(t.ext)")
-        try? fm.removeItem(at: dest)
-        do { try fm.moveItem(at: location, to: dest) } catch {
+        let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 200
+        // Ganze Datei: kein Stückabruf geplant, oder der Server hat den Bereich ignoriert (200 statt 206) und alles geliefert.
+        if t.total == 0 || status == 200 {
+            try? fm.removeItem(at: dest)
+            do { try fm.moveItem(at: location, to: dest) } catch {
+                Task { await fail(t.id, "Datei nicht speicherbar: \(error.localizedDescription)") }
+            }
+            return
+        }
+        // Ein Stück: an die Teildatei anhängen, beim letzten Stück zur fertigen Datei machen, sonst das nächste Stück starten.
+        let part = dest.appendingPathExtension("part")
+        do {
+            if t.offset == 0 { try? fm.removeItem(at: part); fm.createFile(atPath: part.path, contents: nil) }
+            let handle = try FileHandle(forWritingTo: part)
+            defer { try? handle.close() }
+            let end = try handle.seekToEnd()
+            let size = Int64(end)
+            if size > t.offset { try handle.truncate(atOffset: UInt64(t.offset)); try handle.seek(toOffset: UInt64(t.offset)) }
+            else if size < t.offset { throw ChunkError.gap }
+            let data = try Data(contentsOf: location, options: .mappedIfSafe)
+            guard !data.isEmpty else { throw ChunkError.empty }
+            try handle.write(contentsOf: data)
+            let next = t.offset + Int64(data.count)
+            if next >= t.total {
+                try? fm.removeItem(at: dest)
+                try fm.moveItem(at: part, to: dest)
+            } else if let original = downloadTask.originalRequest {
+                var copy = original
+                copy.setValue(nil, forHTTPHeaderField: "Range")
+                let nextRequest = copy
+                let (id, role, ext, total) = (t.id, t.role, t.ext, t.total)
+                Task { [weak self] in
+                    guard let self, let record = await self.store.get(id), record.status == .running else { return }
+                    self.enqueue(nextRequest, id: id, role: role, ext: ext, offset: next, total: total)
+                }
+            }
+        } catch {
             Task { await fail(t.id, "Datei nicht speicherbar: \(error.localizedDescription)") }
         }
+    }
+    private enum ChunkError: Error, LocalizedError {
+        case gap, empty
+        var errorDescription: String? { self == .gap ? "Teilstück fehlt" : "Leeres Teilstück" }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
