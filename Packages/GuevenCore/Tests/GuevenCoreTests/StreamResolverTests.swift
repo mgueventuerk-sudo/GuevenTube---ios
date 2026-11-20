@@ -264,7 +264,7 @@ final class StreamResolverTests: XCTestCase {
         XCTAssertEqual(counter.n, 2)
     }
 
-    func testAlwaysPoTokenSendsPlayerTokenAndAppendsStreamingToken() async throws {
+    func testAlwaysPoTokenAppendsStreamingTokenWithoutMintingPlayerToken() async throws {
         final class Seen: @unchecked Sendable { var tokens: [String?] = [] }
         let seen = Seen()
         let direct = self.direct
@@ -273,8 +273,24 @@ final class StreamResolverTests: XCTestCase {
         let resolver = StreamResolver(endpoint: endpoint, registry: FakeRegistry(), solver: FakeSolver(), scripts: FakeScripts(), poTokens: GeneratingPoTokens(),
                                       health: RouteHealth(store: MemStore()) { clock.now }, autoPoToken: true, alwaysPoToken: true, nowMs: { clock.now })
         let r = try await resolver.resolve("vid12345678")
-        XCTAssertEqual(seen.tokens.first ?? nil, "PLAYER", "/player bekommt den an die Video-ID gebundenen Token")
+        XCTAssertNotEqual(seen.tokens.first ?? nil, "PLAYER", "/player wartet nicht auf einen Video-Token")
         XCTAssertEqual(r.adaptiveFormats.first?.url, "https://rr1.googlevideo.com/videoplayback?id=1&n=NALT&pot=STREAM", "Stream-URL bekommt den an die visitorData gebundenen Token")
+    }
+
+    func testBotCheckWithStreamingTokenMintsPlayerTokenOnDemand() async throws {
+        final class Seen: @unchecked Sendable { var tokens: [String?] = [] }
+        let seen = Seen()
+        let direct = self.direct
+        let endpoint = FakeEndpoint { _, _, _, poToken in
+            seen.tokens.append(poToken)
+            return poToken == "PLAYER" ? self.playable(formats: direct) : self.unplayable("LOGIN_REQUIRED", "Sign in to confirm you’re not a bot")
+        }
+        let clock = ResolverClock()
+        let resolver = StreamResolver(endpoint: endpoint, registry: FakeRegistry(), solver: FakeSolver(), scripts: FakeScripts(), poTokens: GeneratingPoTokens(),
+                                      health: RouteHealth(store: MemStore()) { clock.now }, autoPoToken: true, alwaysPoToken: true, nowMs: { clock.now })
+        let r = try await resolver.resolve("vid12345678")
+        XCTAssertTrue(seen.tokens.contains("PLAYER"), "nach der Bot-Prüfung wird der Video-Token geprägt")
+        XCTAssertTrue(r.adaptiveFormats.first?.url?.hasSuffix("pot=STREAM") == true)
     }
 
     func testSabrOnlyResponseIsReportedAsSabrKind() async {

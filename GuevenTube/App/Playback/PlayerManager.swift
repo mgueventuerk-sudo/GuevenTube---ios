@@ -335,8 +335,15 @@ final class PlayerManager: ObservableObject {
                 let d = item.duration
                 self.durationMs = d.isNumeric && d.seconds.isFinite ? Int64(d.seconds * 1000) : 0
                 if self.state == .loading { self.state = .ready }
-                if startAtMs > 0 { self.seek(toMs: startAtMs) }
-                self.player.play()
+                if startAtMs > 0 {
+                    // Fortsetzen: bis 2 s vor der Stelle ist recht. Ein exakter Sprung lädt und dekodiert ab dem letzten Schlüsselbild.
+                    self.player.seek(to: CMTime(value: startAtMs, timescale: 1000),
+                                     toleranceBefore: CMTime(value: 2, timescale: 1), toleranceAfter: .zero)
+                    self.positionMs = startAtMs
+                }
+                // play() wartet, bis AVPlayer glaubt, ohne Stocken bis zum Ende zu kommen; bei googlevideo dauert das oft Sekunden.
+                // ExoPlayer (Android) startet nach 1 s Puffer. playImmediately startet, sobald etwas abspielbar ist.
+                self.player.playImmediately(atRate: self.player.defaultRate > 0 ? self.player.defaultRate : 1)
                 self.state = .playing
                 if self.startTiming == nil {
                     self.startTiming = "Auflösung \(self.lastResolveMs) ms · Start \(Int(Date().timeIntervalSince(self.startedAt) * 1000)) ms"
