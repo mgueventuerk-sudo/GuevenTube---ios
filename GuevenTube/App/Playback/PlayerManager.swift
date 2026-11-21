@@ -274,6 +274,7 @@ final class PlayerManager: ObservableObject {
 
     func stop() {
         loadTask?.cancel(); watchdog?.cancel(); alternatives = []; hlsMaxHeight = nil
+        startGeneration += 1 // laufende Fehler-Analyse (`recover`) darf nach dem Stopp keinen Fehler mehr anzeigen
         player.pause()
         player.replaceCurrentItem(with: nil)
         itemObservers.removeAll()

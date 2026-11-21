@@ -52,9 +52,13 @@ struct RootView: View {
                 .environmentObject(app)
         }
         .onReceive(NotificationCenter.default.publisher(for: NewVideosService.openVideoNotification)) { n in
-            if let v = n.object as? VideoItem { app.play(v) }
+            if let v = n.object as? VideoItem { NewVideosService.pendingVideo = nil; app.play(v) }
         }
-        .task { kids.start(player: app.player); await kids.refreshPin() }
+        .task {
+            kids.start(player: app.player); await kids.refreshPin()
+            // Kaltstart per Benachrichtigung: die Meldung kam vor dem Abonnieren oben.
+            if let v = NewVideosService.pendingVideo { NewVideosService.pendingVideo = nil; app.play(v) }
+        }
         .fullScreenCover(isPresented: $app.showPlayer) { PlayerScreen(player: app.player).environmentObject(app)
                 .overlay { if let b = kids.block { KidsBlockView(reason: b.reason).environmentObject(kids) } } }
     }

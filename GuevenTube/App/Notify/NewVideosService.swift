@@ -8,6 +8,8 @@ enum NewVideosService {
     static let taskId = "de.gueventube.app.newvideos"
     static let openVideoNotification = Notification.Name("gt.openVideo")
     private static let maxGuestChannels = 15
+    /// Antippen bei Kaltstart: Die Meldung kommt, bevor `RootView` zuhört – darum hier vormerken, `RootView` holt es ab.
+    @MainActor static var pendingVideo: VideoItem?
 
     /// Muss vor Ende von `application(_:didFinishLaunchingWithOptions:)` aufgerufen werden.
     static func register() {
@@ -75,6 +77,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         guard let id = info["videoId"] as? String else { return }
         let item = VideoItem(videoId: id, title: info["title"] as? String ?? "", channelName: (info["channel"] as? String).flatMap { $0.isEmpty ? nil : $0 },
                              thumbnailUrl: info["thumb"] as? String ?? InnerTubeParser.fallbackThumbnail(id))
-        await MainActor.run { NotificationCenter.default.post(name: NewVideosService.openVideoNotification, object: item) }
+        await MainActor.run {
+            NewVideosService.pendingVideo = item
+            NotificationCenter.default.post(name: NewVideosService.openVideoNotification, object: item)
+        }
     }
 }
