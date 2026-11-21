@@ -11,8 +11,8 @@ import GuevenCore
 final class WebViewPoTokenGenerator {
     private static let createUrl = URL(string: "https://www.youtube.com/api/jnn/v1/Create")!
     private static let generateItUrl = URL(string: "https://www.youtube.com/api/jnn/v1/GenerateIT")!
-    // Öffentliche Kennungen des YouTube-Web-Clients (wie in NewPipe und der Android-App), keine Geheimnisse.
-    private static let apiKey = "AIzaSyDyT5W0Jh49F30Pqqtyfdf7pDLFKLJoAnw"
+    // Schlüssel des YouTube-Web-Clients: kommt aus `BuildSecrets` (nicht im Quellcode).
+    private static let apiKey = BuildSecrets.ytWebApiKey
     private static let requestKey = "O43z0dpjhgX20SCx4KAo"
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
     private static let expiryMarginSeconds: Int64 = 600
@@ -82,6 +82,7 @@ final class WebViewPoTokenGenerator {
     }
 
     private func post(_ transport: HTTPTransport, _ url: URL, _ body: String) async throws -> String {
+        guard !Self.apiKey.isEmpty else { throw PoTokenError("BotGuard-Schlüssel fehlt (Build ohne Secrets)") }
         let request = HTTPRequest(url: url, method: "POST", headers: [
             "User-Agent": Self.userAgent,
             "Accept": "application/json",

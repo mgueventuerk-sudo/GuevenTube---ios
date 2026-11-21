@@ -142,9 +142,9 @@ public actor OAuthClient {
     static let deviceGrantType = "http://oauth.net/grant_type/device/1.0"
     static let scope = "http://gdata.youtube.com https://www.googleapis.com/auth/youtube-paid-content"
     static let deviceModel = "ytlr::"
-    /// Öffentliche Kennung der YouTube-TV-Web-App (Stand Oktober 2026).
-    static let fallbackClientId = "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com"
-    static let fallbackClientSecret = "SboVhoG9s0rNafixCSGGKXAT"
+    /// Rückfall-Kennung der YouTube-TV-Web-App: kommt aus `BuildSecrets` (nicht im Quellcode).
+    static let fallbackClientId = BuildSecrets.ytTvClientId
+    static let fallbackClientSecret = BuildSecrets.ytTvClientSecret
     static let credentialsPattern = #"clientId:"([0-9a-z-]+\.apps\.googleusercontent\.com)",[A-Za-z0-9_$]+:"([A-Za-z0-9_-]+)""#
 
     private let transport: HTTPTransport
@@ -271,6 +271,9 @@ public actor OAuthClient {
         } catch is CancellationError {
             throw CancellationError()
         } catch { /* eingebaute Kennung */ }
+        guard !Self.fallbackClientId.isEmpty, !Self.fallbackClientSecret.isEmpty else {
+            throw OAuthError(error: "missing_client", message: "Keine OAuth-Kennung: Live-Suche scheiterte und der Build enthält keine Rückfall-Kennung")
+        }
         return OAuthClientCredentials(clientId: Self.fallbackClientId, clientSecret: Self.fallbackClientSecret)
     }
 }
