@@ -64,7 +64,8 @@ final class MusicModel: ObservableObject {
     func cycleRepeat() { queue.cycleRepeat() }
 
     private func trackEnded() {
-        guard queue.current != nil else { return }
+        // Nur reagieren, wenn der beendete Titel wirklich der Musiktitel ist (nicht ein später gestartetes Video).
+        guard let cur = queue.current, app.current?.videoId == cur.videoId else { return }
         run(queue.trackEnded(using: &rng))
     }
 

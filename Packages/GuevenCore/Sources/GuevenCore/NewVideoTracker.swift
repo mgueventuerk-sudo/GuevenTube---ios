@@ -27,10 +27,14 @@ public struct NewVideoTracker: Sendable {
         var seenIds = Set<String>()
         let videos = feed.filter { !$0.isShort && seenIds.insert($0.videoId).inserted }
         let stored = store.string(Self.keySeen)
-        let previous = stored?.split(separator: Character(Self.separator), omittingEmptySubsequences: true).map(String.init)
+        let parsed = stored?.split(separator: Character(Self.separator), omittingEmptySubsequences: true).map(String.init)
+        // Leerer Stand (erster Feed war leer) zählt als „erster Lauf“, sonst würden später alle alten Videos gemeldet.
+        let previous = (parsed?.isEmpty ?? true) ? nil : parsed
         let known = previous.map(Set.init)
         let fresh = known.map { k in videos.filter { !k.contains($0.videoId) } } ?? []
-        store.setString(Self.nextSeen(videos.map(\.videoId), previous ?? []).joined(separator: Self.separator), for: Self.keySeen)
+        if previous != nil || !videos.isEmpty {
+            store.setString(Self.nextSeen(videos.map(\.videoId), previous ?? []).joined(separator: Self.separator), for: Self.keySeen)
+        }
         return Array(fresh.prefix(Self.maxNotifications))
     }
 }

@@ -227,4 +227,9 @@ final class DownloadQualityTests: XCTestCase {
         let p = playback([fmt(1, "video/mp4; codecs=\"avc1.4d401f\"", h: 720, otf: true), video(2, 480), audio(9, br: 1)])
         XCTAssertEqual(DownloadQualityResolver.resolve(p, quality: .highest)?.videoFormat?.itag, 2)
     }
+
+    func testMsRejectsValuesThatWouldTrap() {
+        XCTAssertEqual(SponsorBlockClient.ms(1.5), 1500)
+        XCTAssertNil(SponsorBlockClient.ms(1e30)); XCTAssertNil(SponsorBlockClient.ms(-1)); XCTAssertNil(SponsorBlockClient.ms(.nan))
+    }
 }

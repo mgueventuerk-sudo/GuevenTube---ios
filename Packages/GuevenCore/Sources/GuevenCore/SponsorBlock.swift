@@ -160,7 +160,7 @@ public actor SponsorBlockClient {
         guard let match = videos.first(where: { $0.videoID == videoId }) else { return [] }
         return (match.segments ?? []).compactMap { dto in
             guard (dto.actionType ?? "skip") == "skip", dto.segment.count >= 2, let category = SponsorCategory.fromApiKey(dto.category) else { return nil }
-            let start = Int64(dto.segment[0] * 1000), end = Int64(dto.segment[1] * 1000)
+            guard let start = Self.ms(dto.segment[0]), let end = Self.ms(dto.segment[1]) else { return nil }
             guard end > start else { return nil }
             return SponsorSegment(uuid: dto.UUID, category: category, startMs: start, endMs: end)
         }
@@ -181,10 +181,16 @@ public actor SponsorBlockClient {
         var result: Int64?
         if response.isSuccessful, let videos = try? JSONDecoder().decode([VideoDto].self, from: response.body) {
             result = videos.first(where: { $0.videoID == videoId })?.segments?
-                .first(where: { $0.category == "poi_highlight" && !$0.segment.isEmpty }).map { Int64($0.segment[0] * 1000) }
+                .first(where: { $0.category == "poi_highlight" && !$0.segment.isEmpty }).flatMap { Self.ms($0.segment[0]) }
         }
         if let result { highlights.put(videoId, result) } else { noHighlight.put(videoId, true) }
         return result
+    }
+
+    /// Sekunden → ms; `nil` bei unsinnigen Werten (negativ, NaN, riesig), die `Int64(_:)` sonst zum Absturz brächten.
+    static func ms(_ seconds: Double) -> Int64? {
+        guard seconds.isFinite, seconds >= 0, seconds < 1e9 else { return nil }
+        return Int64(seconds * 1000)
     }
 
     private static func decode(_ json: String) -> [SponsorSegment]? { try? JSONDecoder().decode([SponsorSegment].self, from: Data(json.utf8)) }

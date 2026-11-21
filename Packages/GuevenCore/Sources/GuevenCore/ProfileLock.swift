@@ -66,6 +66,8 @@ public protocol ProfileLockStore: Sendable {
 public actor ProfileLock {
     public enum VerifyResult: Equatable, Sendable { case ok, wrong, locked(seconds: Int64) }
     public struct InvalidPin: Error, Equatable {}
+    /// Der Schlüsselbund hat die PIN nicht gespeichert.
+    public struct StorageFailed: Error, Equatable { public init() {} }
 
     static let keyPin = "profile.pin"
     static let keyPinConfigured = "profile.pin.configured"
@@ -97,6 +99,8 @@ public actor ProfileLock {
         let hash = derive(pin, salt)
         await gate.acquire()
         await store.putSecret(Self.keyPin, "\(Self.hex(salt)):\(Self.hex(hash))")
+        // `putSecret` meldet Schreibfehler nicht: ohne Nachprüfung stünde „PIN gesetzt“, aber kein Hash im Speicher.
+        guard await store.hasSecretEntry(Self.keyPin) else { await gate.release(); throw StorageFailed() }
         await store.putPlain([Self.keyPinConfigured: Self.flagSet, Self.keyAttempts: nil])
         await gate.release()
     }

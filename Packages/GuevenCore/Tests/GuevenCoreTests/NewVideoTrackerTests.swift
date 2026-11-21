@@ -11,6 +11,13 @@ final class NewVideoTrackerTests: XCTestCase {
         XCTAssertTrue(t.process([video("a"), video("b")]).isEmpty)
     }
 
+    func testEmptyFirstFeedStillCountsAsFirstRun() {
+        let t = NewVideoTracker(store: InMemoryStringStore())
+        XCTAssertTrue(t.process([]).isEmpty)
+        XCTAssertTrue(t.process([video("a"), video("b")]).isEmpty, "kein Meldungsschwall nach leerem Erst-Feed")
+        XCTAssertEqual(t.process([video("c"), video("a")]).map(\.videoId), ["c"])
+    }
+
     func testSecondRunReportsOnlyNewVideosNewestFirst() {
         let t = NewVideoTracker(store: InMemoryStringStore())
         _ = t.process([video("a"), video("b")])

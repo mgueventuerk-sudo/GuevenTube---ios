@@ -50,7 +50,9 @@ final class KidsModel: ObservableObject {
     }
 
     func setPin(_ pin: String) async -> String? {
-        do { try await env.profileLock.setPin(pin) } catch { return "Die PIN braucht 4 bis 8 Ziffern." }
+        do { try await env.profileLock.setPin(pin) }
+        catch is ProfileLock.StorageFailed { return "Die PIN konnte nicht gespeichert werden." }
+        catch { return "Die PIN braucht 4 bis 8 Ziffern." }
         await refreshPin()
         return nil
     }

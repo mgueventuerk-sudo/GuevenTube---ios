@@ -48,6 +48,8 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
         let base = (try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)) ?? fm.temporaryDirectory
         let dir = base.appendingPathComponent("download-staging/\(id)", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        var values = URLResourceValues(); values.isExcludedFromBackup = true
+        var excluded = dir; try? excluded.setResourceValues(values) // Teil-Downloads gehören nicht ins Backup
         return dir
     }
 
@@ -65,6 +67,7 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
                 await store.setFailed(downloadId, message: "Kein passendes Format gefunden", now: Self.now()); return
             }
             lock.withLock { parts[downloadId] = [:]; lastTick[downloadId] = nil }
+            try? fm.removeItem(at: staging(downloadId)) // Reste eines früheren Versuchs nicht mit neuen Teilen mischen
             if let v = formats.videoFormat { try start(v, role: "video", id: downloadId, ua: playback.userAgent) }
             try start(formats.audioFormat, role: "audio", id: downloadId, ua: playback.userAgent)
             await store.setProgress(downloadId, percent: 0, downloadedBytes: 0, totalBytes: nil, bytesPerSecond: 0,
@@ -232,6 +235,7 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
             if needsVideo { await saveToPhotos(out) }
         } catch {
             try? fm.removeItem(at: out) // halb geschriebene Ausgabedatei nicht liegen lassen
+            try? fm.removeItem(at: dir)
             await store.setFailed(id, message: "Zusammenfügen fehlgeschlagen: \(error.localizedDescription)", now: Self.now())
         }
     }
