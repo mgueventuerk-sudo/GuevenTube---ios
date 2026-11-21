@@ -175,23 +175,28 @@ struct NowPlayingView: View {
     init(player: PlayerManager) { self._player = ObservedObject(wrappedValue: player) }
 
     var body: some View {
-        ScrollView {
-            // Breite fest an die Sheet-Breite binden: ein langer Liedtext darf den Inhalt nicht breiter als den Bildschirm machen.
-            content.padding(.horizontal, 24).padding(.bottom, 24).containerRelativeFrame(.horizontal)
+        // Alle Größen kommen aus der echten Sheet-Breite. Ohne feste Breite machten Cover (scaledToFill, Pixelgröße)
+        // und Liedtext den Inhalt breiter als den Bildschirm: Der Player war nach rechts verschoben und abgeschnitten.
+        GeometryReader { geo in
+            let w = max(240, geo.size.width - 48)
+            ScrollView {
+                content(width: w).frame(width: w).padding(.horizontal, 24).padding(.bottom, 24).frame(width: geo.size.width)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
         .tint(GT.accent)
         .presentationDragIndicator(.visible)
         .task(id: music.queue.current?.videoId) { await music.loadLyrics() }
     }
 
-    private var content: some View {
+    private func content(width w: CGFloat) -> some View {
         VStack(spacing: 20) {
             Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }
                 .frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Schließen")
             if let song = music.queue.current {
+                let side = min(w, 340)
                 AsyncImage(url: URL(string: song.thumbnailUrl ?? "")) { $0.resizable().scaledToFill() } placeholder: { GT.surface }
-                    .aspectRatio(1, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 12)).frame(maxHeight: 340)
+                    .frame(width: side, height: side).clipShape(RoundedRectangle(cornerRadius: 12))
                 HStack(spacing: 12) {
                     VStack(spacing: 4) {
                         Text(song.title).font(.title3.weight(.bold)).multilineTextAlignment(.center).lineLimit(2)
@@ -209,12 +214,12 @@ struct NowPlayingView: View {
                 }
                 progress
                 controls
-                lyricsSection
+                lyricsSection(width: w)
             }
         }
     }
 
-    @ViewBuilder private var lyricsSection: some View {
+    @ViewBuilder private func lyricsSection(width w: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Liedtext").font(.headline)
             switch music.lyricsState {
@@ -222,7 +227,7 @@ struct NowPlayingView: View {
             case .loaded:
                 if let l = music.lyrics {
                     Text(l.text).font(.body).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(width: w, alignment: .leading)
                     if let source = l.source { Text(source).font(.caption).foregroundStyle(GT.secondaryText) }
                 }
             case .none: Text("Für diesen Titel gibt es keinen Liedtext.").font(.subheadline).foregroundStyle(GT.secondaryText)
@@ -231,7 +236,7 @@ struct NowPlayingView: View {
                 Button("Erneut versuchen") { Task { await music.loadLyrics(retry: true) } }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+        .frame(width: w, alignment: .leading).padding(.top, 8)
     }
 
     private var progress: some View {
