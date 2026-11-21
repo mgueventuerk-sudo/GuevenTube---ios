@@ -141,4 +141,11 @@ final class LocalLibraryTests: XCTestCase {
         let v: Void? = await it.next()
         XCTAssertNotNil(v)
     }
+
+    func testMergeClampsAbsurdValuesFromPairedDevice() async {
+        let lib = LocalLibrary()
+        await lib.mergeProgress([WatchProgressEntry(videoId: "v", positionMs: Int64.max, durationMs: Int64.max, updatedAt: 1)])
+        let items = await lib.continueWatching() // darf nicht abstürzen
+        XCTAssertTrue(items.isEmpty || items.count == 1)
+    }
 }

@@ -59,6 +59,8 @@ public struct DuplicatePlaylistName: Error, Equatable {}
 public actor LocalLibrary {
     public static let watchLater = "Später ansehen"
     static let minResumePositionMs: Int64 = 30_000
+    /// Obergrenze für Positionen/Dauern (ca. 31 Jahre).
+    static let maxMs: Int64 = 1_000_000_000_000
     static let finishedPercent: Int64 = 95
     static let maxProgressEntries = 500
     static let pruneEverySaves = 50
@@ -136,7 +138,7 @@ public actor LocalLibrary {
     }
 
     public func saveProgress(videoId: String, positionMs: Int64, durationMs: Int64, title: String?, channelName: String?, thumbnailUrl: String?) {
-        upsertProgress(WatchProgressEntry(videoId: videoId, positionMs: max(positionMs, 0), durationMs: max(durationMs, 0), updatedAt: nowMs(),
+        upsertProgress(WatchProgressEntry(videoId: videoId, positionMs: min(max(positionMs, 0), Self.maxMs), durationMs: min(max(durationMs, 0), Self.maxMs), updatedAt: nowMs(),
                                           title: title, channelName: channelName, thumbnailUrl: thumbnailUrl))
         savesSincePrune += 1
         if savesSincePrune >= Self.pruneEverySaves { savesSincePrune = 0; prune() }
@@ -155,7 +157,8 @@ public actor LocalLibrary {
         var merged = 0
         for var entry in entries {
             if let own = data.progress.first(where: { $0.videoId == entry.videoId }), own.updatedAt >= entry.updatedAt { continue }
-            entry.positionMs = max(entry.positionMs, 0); entry.durationMs = max(entry.durationMs, 0)
+            // Fremde Werte begrenzen: `durationMs * 95` in `continueWatching` würde bei absurden Zahlen überlaufen.
+            entry.positionMs = min(max(entry.positionMs, 0), Self.maxMs); entry.durationMs = min(max(entry.durationMs, 0), Self.maxMs)
             upsertProgress(entry); merged += 1
         }
         if merged > 0 { commit() }
