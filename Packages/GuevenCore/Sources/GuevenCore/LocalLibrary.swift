@@ -61,7 +61,7 @@ public actor LocalLibrary {
     /// Geliketen Musiktitel (eigene Liste, in „Meine Playlists“ ausgeblendet).
     public static let favoriteSongs = "Lieblingssongs"
     /// Namen, die Nutzer nicht selbst vergeben oder umbenennen dürfen.
-    public static let reservedNames: Set<String> = [watchLater, favoriteSongs]
+    public static let reservedNames: Set<String> = [LocalLibrary.watchLater, LocalLibrary.favoriteSongs]
     static let minResumePositionMs: Int64 = 30_000
     /// Obergrenze für Positionen/Dauern (ca. 31 Jahre).
     static let maxMs: Int64 = 1_000_000_000_000

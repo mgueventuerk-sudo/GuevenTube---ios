@@ -29,7 +29,6 @@ struct MusicView: View {
             }
             .gtList()
             .overlay { if music.loading && music.sections.isEmpty { ProgressView() } }
-            .safeAreaInset(edge: .bottom) { MiniPlayer() }
             .navigationTitle("Musik")
             .toolbar {
                 // Immer sichtbar (auch während der Suche), nicht nur als Listenzeile.
@@ -102,6 +101,11 @@ struct PlayPauseIcon: View {
 }
 
 /// Kleine Steuerleiste unten, solange ein Titel läuft. Antippen öffnet den großen Player.
+extension View {
+    /// Mini-Player über der Tab-Leiste; gilt auch für alle Seiten, die im Tab geöffnet werden.
+    func withMiniPlayer() -> some View { safeAreaInset(edge: .bottom, spacing: 0) { MiniPlayer() } }
+}
+
 struct MiniPlayer: View {
     @EnvironmentObject var music: MusicModel
     @EnvironmentObject var app: AppModel
@@ -109,7 +113,7 @@ struct MiniPlayer: View {
 
     var body: some View {
         Group {
-            if let song = music.queue.current {
+            if let song = music.queue.current, app.current?.videoId == song.videoId {
                 // Der Player ist ein eigenes ObservableObject: nur so zeichnet sich die Leiste bei Zustandswechseln neu.
                 MiniPlayerBar(song: song, player: app.player) { showFull = true }
             }
@@ -322,8 +326,6 @@ struct MusicDetailView: View {
             }
         }
         .overlay { if detail == nil && error == nil { ProgressView() } }
-        // Sonst verschwindet die Steuerleiste, sobald man ein Album öffnet (die Leiste hängt sonst nur an der Startseite).
-        .safeAreaInset(edge: .bottom) { MiniPlayer() }
         .navigationTitle(collection.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -366,7 +368,6 @@ struct FavoriteSongsView: View {
             }
         }
         .gtList()
-        .safeAreaInset(edge: .bottom) { MiniPlayer() }
         .navigationTitle("Lieblingssongs")
         .task { await music.reloadFavorites() }
     }
