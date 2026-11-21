@@ -82,6 +82,12 @@ final class LocalLibraryTests: XCTestCase {
         let p = await l.playlists(); XCTAssertEqual(p.count, 1); XCTAssertEqual(p[0].itemCount, 1)
     }
 
+    func testReadingFavoritesDoesNotCreateTheList() async {
+        let l = lib()
+        let items = await l.favoriteSongItems(), ids = await l.favoriteSongIds(), lists = await l.playlists()
+        XCTAssertTrue(items.isEmpty); XCTAssertTrue(ids.isEmpty); XCTAssertTrue(lists.isEmpty)
+    }
+
     func testFavoriteSongsToggleIdempotentAndSeparateFromWatchLater() async {
         let l = lib()
         await l.setFavoriteSong(video("a"), liked: true); await l.setFavoriteSong(video("a"), liked: true); await l.setFavoriteSong(video("b"), liked: true)

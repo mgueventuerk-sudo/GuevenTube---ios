@@ -242,7 +242,8 @@ public actor InnerTubeService {
         await ensureVisitorDataLoaded()
         var urlQuery = ""
         if client.clientName == "WEB_REMIX", case .string(let token)? = payload.first(where: { $0.0 == "continuation" })?.1, !token.isEmpty,
-           let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
+           let enc = token.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&#"))) {
+            // Das Token enthält schon „%3D“ u. Ä.: unverändert anhängen (wie ytmusicapi), nicht doppelt kodieren.
             urlQuery = "&ctoken=\(enc)&continuation=\(enc)&type=next"
         }
         let (hl, gl) = locale()
@@ -270,6 +271,8 @@ public actor InnerTubeService {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
+                // Abgebrochene Aufgabe (z. B. Ansicht geschlossen): URLSession meldet das als Netzwerkfehler; nicht wiederholen.
+                if Task.isCancelled { throw CancellationError() }
                 if attempt >= Self.maxRetries { throw error }
             }
             let retryable = response == nil || response!.code == 429 || (500...599).contains(response!.code)

@@ -263,7 +263,10 @@ public actor LocalLibrary {
     // MARK: Lieblingssongs
 
     /// Neueste zuerst.
-    public func favoriteSongItems() -> [LocalPlaylistItem] { items(in: playlistId(named: Self.favoriteSongs)) }
+    public func favoriteSongItems() -> [LocalPlaylistItem] {
+        guard let p = data.playlists.first(where: { $0.name == Self.favoriteSongs }) else { return [] } // Lesen legt keine Liste an
+        return items(in: p.id)
+    }
     public func favoriteSongIds() -> Set<String> {
         guard let p = data.playlists.first(where: { $0.name == Self.favoriteSongs }) else { return [] }
         return Set(data.items.lazy.filter { $0.playlistId == p.id }.map(\.videoId))

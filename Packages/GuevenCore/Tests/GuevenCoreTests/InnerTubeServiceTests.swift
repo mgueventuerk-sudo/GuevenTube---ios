@@ -160,6 +160,15 @@ final class InnerTubeServiceTests: XCTestCase {
         XCTAssertEqual(secrets.store[InnerTubeService.secretVisitorData], "SHARED", "Music überschreibt die gemeinsame visitorData nicht")
     }
 
+    func testMusicContinuationIsAlsoSentInUrlUnchangedButWebSearchIsNot() async throws {
+        let (service, transport) = make([ok("{}"), ok("{}")])
+        _ = try await service.music("search", withAccount: false, payload: [("continuation", "AAA%3D")])
+        _ = try await service.search(query: nil, continuation: "BBB")
+        let music = transport.requests[1].url.absoluteString, web = transport.requests[2].url.absoluteString
+        XCTAssertTrue(music.hasSuffix("?prettyPrint=false&ctoken=AAA%3D&continuation=AAA%3D&type=next"), music)
+        XCTAssertFalse(web.contains("ctoken"), web)
+    }
+
     func testInvalidJsonAndHttpErrorsThrow() async {
         let (service, _) = make([ok("kein json")])
         do { _ = try await service.search(query: "x"); XCTFail() } catch let e as InnerTubeError { XCTAssertTrue(e.message.contains("ungültiges JSON")) } catch { XCTFail() }

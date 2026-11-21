@@ -389,8 +389,19 @@ final class PlayerManager: ObservableObject {
         }
     }
 
+    /// Weiter/Zurück vom Sperrbildschirm (Musik). `nil`: die Befehle sind aus, dann gelten ±10 s.
+    var trackCommands: (next: () -> Void, previous: () -> Void)? {
+        didSet {
+            let c = MPRemoteCommandCenter.shared()
+            c.nextTrackCommand.isEnabled = trackCommands != nil
+            c.previousTrackCommand.isEnabled = trackCommands != nil
+        }
+    }
+
     private func configureRemoteCommands() {
         let c = MPRemoteCommandCenter.shared()
+        c.nextTrackCommand.isEnabled = false
+        c.previousTrackCommand.isEnabled = false
         func add(_ cmd: MPRemoteCommand, _ handler: @escaping @MainActor (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus) {
             // assumeIsolated stürzt ab, wenn iOS den Handler nicht auf dem Main-Thread ruft: dann dorthin wechseln.
             let target = cmd.addTarget { e in
@@ -402,6 +413,14 @@ final class PlayerManager: ObservableObject {
         add(c.playCommand) { [weak self] _ in self?.resume(); return .success }
         add(c.pauseCommand) { [weak self] _ in self?.pause(); return .success }
         add(c.togglePlayPauseCommand) { [weak self] _ in self?.toggle(); return .success }
+        add(c.nextTrackCommand) { [weak self] _ in
+            guard let t = self?.trackCommands else { return .noActionableNowPlayingItem }
+            t.next(); return .success
+        }
+        add(c.previousTrackCommand) { [weak self] _ in
+            guard let t = self?.trackCommands else { return .noActionableNowPlayingItem }
+            t.previous(); return .success
+        }
         c.skipForwardCommand.preferredIntervals = [10]
         c.skipBackwardCommand.preferredIntervals = [10]
         add(c.skipForwardCommand) { [weak self] _ in self?.skip(byMs: 10_000); return .success }

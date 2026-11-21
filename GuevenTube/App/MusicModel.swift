@@ -43,9 +43,21 @@ final class MusicModel: ObservableObject {
         Task { await library.setFavoriteSong(video, liked: liked); await reloadFavorites() }
     }
 
+    private var currentObserver: AnyCancellable?
+
     init(app: AppModel) {
         self.app = app
         Task { await reloadFavorites() }
+        // Weiter/Zurück auf Sperrbildschirm und in der Kopfhörer-Steuerung nur, solange ein Musiktitel läuft.
+        currentObserver = app.$current.sink { [weak self] item in
+            guard let self else { return }
+            let isMusic = item != nil && item?.videoId == self.queue.current?.videoId
+            if isMusic {
+                self.app.player.trackCommands = (next: { [weak self] in self?.next() }, previous: { [weak self] in self?.previous() })
+            } else {
+                self.app.player.trackCommands = nil
+            }
+        }
         endObserver = app.player.$state.removeDuplicates().sink { [weak self] state in
             if state == .ended { self?.trackEnded() }
         }
@@ -128,6 +140,7 @@ final class MusicModel: ObservableObject {
 
     private func load(endpoint: String, _ call: () async throws -> JSON) async {
         generation += 1; let gen = generation; continuationEndpoint = endpoint; continuation = nil
+        loadingMore = false // ein verworfenes Nachladen darf den Spinner nicht dauerhaft stehen lassen
         loading = true; defer { if gen == generation { loading = false } }
         do {
             let page = MusicParser.parseSections(try await call())
@@ -164,9 +177,12 @@ final class MusicModel: ObservableObject {
             guard let browseId = MusicParser.parseQueue(json).lyricsBrowseId else { finishLyrics(song.videoId, nil, .none); return }
             let page = try await musicCall("browse", [("browseId", .string(browseId))])
             if let text = MusicParser.parseLyrics(page) { finishLyrics(song.videoId, text, .loaded) } else { finishLyrics(song.videoId, nil, .none) }
-        } catch is CancellationError {
-            if lyricsVideoId == song.videoId { lyricsVideoId = nil; lyricsState = .idle }
-        } catch { finishLyrics(song.videoId, nil, .failed) }
+        } catch {
+            // Player-Fenster geschlossen (Task abgebrochen): kein Fehler, beim nächsten Öffnen neu laden.
+            if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+                if lyricsVideoId == song.videoId { lyricsVideoId = nil; lyricsState = .idle; lyrics = nil }
+            } else { finishLyrics(song.videoId, nil, .failed) }
+        }
     }
 
     private func finishLyrics(_ videoId: String, _ text: MusicLyrics?, _ state: LyricsState) {

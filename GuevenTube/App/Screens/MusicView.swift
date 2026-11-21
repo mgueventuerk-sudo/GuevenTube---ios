@@ -77,7 +77,9 @@ struct MusicView: View {
                 Text(item.title).lineLimit(1)
                 if let s = item.subtitle { Text(s).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
+            Spacer(minLength: 0)
         }
+        .contentShape(Rectangle())
         if case .song(let s) = item {
             Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { content }.buttonStyle(.plain)
                 .swipeActions(edge: .trailing) { likeButton(s) }
@@ -305,13 +307,17 @@ struct MusicDetailView: View {
                     Section("Titel") {
                         ForEach(Array(d.tracks.enumerated()), id: \.offset) { i, t in
                             Button { music.play(d.tracks, index: i) } label: {
-                                VStack(alignment: .leading) {
-                                    Text(t.title).lineLimit(1)
-                                    if let a = t.artists { Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-                                }
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(t.title).lineLimit(1)
+                                        if let a = t.artists { Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                                    }
+                                    Spacer(minLength: 0)
+                                }.contentShape(Rectangle())
                             }.buttonStyle(.plain)
                             .overlay(alignment: .trailing) {
                                 Image(systemName: "heart.fill").foregroundStyle(GT.accent).opacity(music.isFavorite(t) ? 1 : 0)
+                                    .accessibilityHidden(!music.isFavorite(t)).allowsHitTesting(false)
                             }
                             .swipeActions(edge: .trailing) {
                                 Button { music.toggleFavorite(t) } label: {
@@ -369,7 +375,8 @@ struct FavoriteSongsView: View {
                                 Text(s.title).lineLimit(1)
                                 if let a = s.artists { Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                             }
-                        }
+                            Spacer(minLength: 0)
+                        }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
                     .swipeActions { Button("Entfernen", role: .destructive) { music.toggleFavorite(s) } }
                 }

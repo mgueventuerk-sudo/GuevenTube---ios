@@ -162,7 +162,8 @@ final class AppModel: ObservableObject {
 
     /// Fortschritt höchstens alle 10 s sichern (Datei wird je Speichern geschrieben).
     private func saveProgress(_ ms: Int64, force: Bool = false) {
-        guard let item = current, !(player.plan?.isLive ?? false), player.durationMs > 0 else { return }
+        // Musik (nur Ton) gehört nicht in „Weiterschauen“: Sie startet ohnehin immer bei 0.
+        guard let item = current, !lastAudioOnly, !(player.plan?.isLive ?? false), player.durationMs > 0 else { return }
         guard force || abs(ms - lastSavedAtMs) >= 10_000 else { return }
         lastSavedAtMs = ms
         let duration = player.durationMs
