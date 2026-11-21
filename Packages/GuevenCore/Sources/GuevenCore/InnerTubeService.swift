@@ -242,7 +242,7 @@ public actor InnerTubeService {
         await ensureVisitorDataLoaded()
         var urlQuery = ""
         if client.clientName == "WEB_REMIX", case .string(let token)? = payload.first(where: { $0.0 == "continuation" })?.1, !token.isEmpty,
-           let enc = token.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&#"))) {
+           let enc = token.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed.union(CharacterSet(charactersIn: "%")).subtracting(CharacterSet(charactersIn: "&#"))) {
             // Das Token enthält schon „%3D“ u. Ä.: unverändert anhängen (wie ytmusicapi), nicht doppelt kodieren.
             urlQuery = "&ctoken=\(enc)&continuation=\(enc)&type=next"
         }
