@@ -89,7 +89,8 @@ final class ProfileLockTests: XCTestCase {
         let has = await lock.hasPin(); let ok = await lock.verify("4711"); let bad = await lock.verify("0000")
         XCTAssertTrue(has); XCTAssertEqual(ok, .ok); XCTAssertEqual(bad, .wrong)
         let stored = await store.secrets["profile.pin"]
-        XCTAssertFalse(stored!.contains("4711"))
+        // Salt und Hash sind zufällig/gehasht: „4711“ kann zufällig als Teilfolge vorkommen, darf aber nie ein ganzes Feld sein.
+        XCTAssertFalse(stored!.split(separator: ":").contains("4711"))
         XCTAssertEqual(stored!.split(separator: ":").count, 2)
     }
 
