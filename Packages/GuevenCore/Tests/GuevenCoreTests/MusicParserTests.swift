@@ -57,6 +57,21 @@ final class MusicParserTests: XCTestCase {
         items.compactMap { if case .song(let s) = $0 { return s } else { return nil } }
     }
 
+    func testSearchContinuationPageIsParsedAsUntitledSection() throws {
+        let cont = #"""
+        {"continuationContents":{"musicShelfContinuation":{"contents":[
+          {"musicResponsiveListItemRenderer":{"playlistItemData":{"videoId":"vid00000009"},
+            "flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Weiterer Song"}]}}},
+                           {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Song"},{"text":" • "},{"text":"Band"}]}}}]}}
+        ],"continuations":[{"nextContinuationData":{"continuation":"CONT2"}}]}}}
+        """#
+        let page = MusicParser.parseSections(json(cont))
+        XCTAssertEqual(page.sections.count, 1)
+        XCTAssertEqual(page.sections[0].title, "")
+        XCTAssertEqual(songs(page.sections[0].items).map(\.videoId), ["vid00000009"])
+        XCTAssertEqual(page.continuation, "CONT2")
+    }
+
     func testHomeSectionsInDocumentOrderWithAllItemKinds() throws {
         let page = MusicParser.parseSections(json(home()))
         XCTAssertEqual(page.sections.map(\.title), ["Schnellauswahl", "Charts"])

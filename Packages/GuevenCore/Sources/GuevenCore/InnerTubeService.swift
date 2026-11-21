@@ -198,6 +198,7 @@ public actor InnerTubeService {
     /// YouTube Music. Mit [withAccount] wird der vorhandene Token **nur gelesen** mitgeschickt – ohne erzwungene
     /// Token-Erneuerung bei 401. Lehnt YouTube Music den Token ab (400/401/403), wird anonym wiederholt;
     /// [accountAccepted] meldet, ob der Token angenommen wurde.
+    /// `continuation` (Weiterladen einer Liste) geht zusätzlich als URL-Parameter mit; das Musik-Web verlangt beides.
     public func music(_ endpoint: String, withAccount: Bool, accountAccepted: @Sendable (Bool) -> Void = { _ in }, payload: [(String, JSON)]) async throws -> JSON {
         _ = await config.config()
         let client = RequestClient.of(.webRemix, version: await config.clientVersion(.webRemix))
@@ -239,23 +240,28 @@ public actor InnerTubeService {
     private func post(_ endpoint: String, _ client: RequestClient, useAccount: Bool, explicitAccessToken: String? = nil,
                       keepVisitorData: Bool = false, payload: [(String, JSON)]) async throws -> JSON {
         await ensureVisitorDataLoaded()
+        var urlQuery = ""
+        if client.clientName == "WEB_REMIX", case .string(let token)? = payload.first(where: { $0.0 == "continuation" })?.1, !token.isEmpty,
+           let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
+            urlQuery = "&ctoken=\(enc)&continuation=\(enc)&type=next"
+        }
         let (hl, gl) = locale()
         let body = buildRequestBody(client: client, visitorData: visitorData, hl: hl, gl: gl, lockedSafetyMode: lockedSafetyMode(), payload: payload)
         let bodyData = Data(body.serialized().utf8)
         let accountToken = (explicitAccessToken == nil && useAccount) ? await auth.activeToken() : nil
         let accessToken = explicitAccessToken ?? accountToken?.accessToken
-        var response = try await executeWithBackoff(endpoint, client, bodyData, accessToken)
+        var response = try await executeWithBackoff(endpoint, client, bodyData, accessToken, urlQuery: urlQuery)
         if response.code == 401, let accountToken {
             // Nur dasselbe Konto erneuern.
             let refreshed = await auth.forceRefresh(accessToken: accountToken.accessToken, accountId: accountToken.accountId)
-            response = try await executeWithBackoff(endpoint, client, bodyData, refreshed)
+            response = try await executeWithBackoff(endpoint, client, bodyData, refreshed, urlQuery: urlQuery)
         }
         return try await handleResponse(endpoint, response, keepVisitorData: keepVisitorData)
     }
 
     /// Wiederholt bei HTTP 429 und 5xx mit exponentiellem Backoff (1 s, 2 s, 4 s) bzw. dem gesendeten
     /// `Retry-After` (gedeckelt). Netzwerkfehler werden ebenso wiederholt.
-    private func executeWithBackoff(_ endpoint: String, _ client: RequestClient, _ body: Data, _ accessToken: String?) async throws -> HTTPResponse {
+    private func executeWithBackoff(_ endpoint: String, _ client: RequestClient, _ body: Data, _ accessToken: String?, urlQuery: String = "") async throws -> HTTPResponse {
         var attempt = 0
         while true {
             var response: HTTPResponse?
@@ -282,7 +288,7 @@ public actor InnerTubeService {
         ]
         if let visitorData { headers["X-Goog-Visitor-Id"] = visitorData }
         if let accessToken { headers["Authorization"] = "Bearer \(accessToken)" }
-        let url = URL(string: "\(client.origin)\(Self.apiPath)\(endpoint)?prettyPrint=false")!
+        let url = URL(string: "\(client.origin)\(Self.apiPath)\(endpoint)?prettyPrint=false\(urlQuery)")!
         return try await transport.send(HTTPRequest(url: url, method: "POST", headers: headers, body: body))
     }
 

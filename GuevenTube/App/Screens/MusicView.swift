@@ -9,15 +9,20 @@ struct MusicView: View {
     var body: some View {
         NavigationStack {
             List {
-                if let e = music.error { Text(e).foregroundStyle(.red) }
-                ForEach(Array(music.sections.enumerated()), id: \.offset) { _, section in
+                if !music.searchQuery.isEmpty { filterChips }
+                if let e = music.error { Text(e).foregroundStyle(music.sections.isEmpty ? Color.secondary : Color.red) }
+                ForEach(Array(music.sections.enumerated()), id: \.offset) { index, section in
                     Section(section.title) {
                         let songs = section.items.compactMap { item -> MusicSong? in if case .song(let s) = item { return s }; return nil }
-                        ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
+                        ForEach(Array(section.items.enumerated()), id: \.offset) { i, item in
                             row(item, songs: songs)
+                                .onAppear {
+                                    if index == music.sections.count - 1, i >= section.items.count - 3 { Task { await music.loadMore() } }
+                                }
                         }
                     }
                 }
+                if music.loadingMore { ProgressView().frame(maxWidth: .infinity) }
             }
             .gtList()
             .overlay { if music.loading && music.sections.isEmpty { ProgressView() } }
@@ -26,8 +31,27 @@ struct MusicView: View {
             .navigationDestination(for: MusicCollection.self) { MusicDetailView(collection: $0) }
             .searchable(text: $query, prompt: "Songs, Alben, Interpreten")
             .onSubmit(of: .search) { Task { await music.search(query) } }
+            .onChange(of: query) { _, new in
+                // Suchfeld geleert: zurück zur Startseite (sonst bleiben alte Treffer stehen).
+                if new.isEmpty, !music.searchQuery.isEmpty { Task { await music.loadHome() } }
+            }
             .task { if music.sections.isEmpty { await music.loadHome() } }
         }
+    }
+
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(MusicModel.SearchFilter.allCases) { f in
+                    Button { Task { await music.setFilter(f) } } label: {
+                        Text(f.title).font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 34)
+                            .background(music.filter == f ? GT.accent : GT.surface, in: Capsule())
+                            .foregroundStyle(music.filter == f ? Color.white : Color.primary)
+                    }.buttonStyle(.plain)
+                }
+            }.padding(.vertical, 2)
+        }
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16)).listRowBackground(Color.clear)
     }
 
     @ViewBuilder private func row(_ item: MusicItem, songs: [MusicSong]) -> some View {

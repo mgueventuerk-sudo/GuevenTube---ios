@@ -5,6 +5,7 @@ import Foundation
 public enum MusicParser {
     private static let sectionKeys: Set<String> = [
         "musicCarouselShelfRenderer", "musicShelfRenderer", "musicPlaylistShelfRenderer", "musicCardShelfRenderer", "gridRenderer",
+        "musicShelfContinuation",
     ]
     private static let headerKeys = [
         "musicResponsiveHeaderRenderer", "musicDetailHeaderRenderer", "musicImmersiveHeaderRenderer", "musicVisualHeaderRenderer",

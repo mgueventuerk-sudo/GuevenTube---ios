@@ -29,14 +29,72 @@ final class MusicModel: ObservableObject {
 
     // MARK: Laden
 
+    /// Suchfilter von YouTube Music (`params` wie in ytmusicapi); `nil`: alles.
+    enum SearchFilter: String, CaseIterable, Identifiable {
+        case all, songs, videos, albums, artists, playlists
+        var id: String { rawValue }
+        var title: String {
+            switch self { case .all: "Alle"; case .songs: "Songs"; case .videos: "Videos"; case .albums: "Alben"; case .artists: "Interpreten"; case .playlists: "Playlists" }
+        }
+        var params: String? {
+            let tail = "AWoMEA4QChADEAQQCRAF"
+            switch self {
+            case .all: return nil
+            case .songs: return "EgWKAQII" + tail
+            case .videos: return "EgWKAQIQ" + tail
+            case .albums: return "EgWKAQIY" + tail
+            case .artists: return "EgWKAQIg" + tail
+            case .playlists: return "EgWKAQIo" + tail
+            }
+        }
+    }
+
+    @Published private(set) var continuation: String?
+    @Published private(set) var loadingMore = false
+    @Published var filter: SearchFilter = .all
+    @Published private(set) var searchQuery = ""
+    /// Jede neue Anfrage zählt hoch; Antworten älterer Anfragen werden verworfen.
+    private var generation = 0
+    private var continuationEndpoint = "search"
+
     func loadHome() async {
-        await load { try await self.musicCall("browse", [("browseId", .string("FEmusic_home"))]) }
+        searchQuery = ""
+        await load(endpoint: "browse") { try await self.musicCall("browse", [("browseId", .string("FEmusic_home"))]) }
     }
 
     func search(_ q: String) async {
         let text = q.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        await load { try await self.musicCall("search", [("query", .string(text))]) }
+        searchQuery = text
+        var payload: [(String, JSON)] = [("query", .string(text))]
+        if let p = filter.params { payload.append(("params", .string(p))) }
+        await load(endpoint: "search") { try await self.musicCall("search", payload) }
+    }
+
+    func setFilter(_ f: SearchFilter) async {
+        guard f != filter else { return }
+        filter = f
+        if !searchQuery.isEmpty { await search(searchQuery) }
+    }
+
+    /// Weitere Treffer derselben Liste (Suche mit Filter, Startseite).
+    func loadMore() async {
+        guard let token = continuation, !loading, !loadingMore else { return }
+        let gen = generation
+        loadingMore = true; defer { if gen == generation { loadingMore = false } }
+        do {
+            let page = MusicParser.parseSections(try await musicCall(continuationEndpoint, [("continuation", .string(token))]))
+            guard gen == generation else { return }
+            var merged = sections
+            var known = Set(merged.flatMap { $0.items.map(\.key) })
+            for s in page.sections {
+                let fresh = s.items.filter { known.insert($0.key).inserted }
+                if fresh.isEmpty { continue }
+                if s.title.isEmpty, let last = merged.indices.last { merged[last].items += fresh } else { merged.append(MusicSection(title: s.title, items: fresh)) }
+            }
+            sections = merged
+            continuation = page.continuation == token ? nil : page.continuation
+        } catch { guard gen == generation else { return }; continuation = nil }
     }
 
     /// Album-, Playlist- oder Interpretenseite.
@@ -44,12 +102,15 @@ final class MusicModel: ObservableObject {
         MusicParser.parseDetail(try await musicCall("browse", [("browseId", .string(browseId))]))
     }
 
-    private func load(_ call: () async throws -> JSON) async {
-        loading = true; defer { loading = false }
+    private func load(endpoint: String, _ call: () async throws -> JSON) async {
+        generation += 1; let gen = generation; continuationEndpoint = endpoint; continuation = nil
+        loading = true; defer { if gen == generation { loading = false } }
         do {
-            sections = MusicParser.parseSections(try await call()).sections
+            let page = MusicParser.parseSections(try await call())
+            guard gen == generation else { return }
+            sections = page.sections; continuation = page.continuation
             error = sections.isEmpty ? "Keine Ergebnisse." : nil
-        } catch { self.error = GTError.text(error) }
+        } catch { guard gen == generation else { return }; self.error = GTError.text(error) }
     }
 
     private func musicCall(_ endpoint: String, _ payload: [(String, JSON)]) async throws -> JSON {
