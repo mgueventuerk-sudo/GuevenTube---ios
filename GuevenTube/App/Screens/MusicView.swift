@@ -9,11 +9,10 @@ struct MusicView: View {
     var body: some View {
         NavigationStack {
             List {
-                if !music.searchQuery.isEmpty { filterChips } else {
-                    NavigationLink { FavoriteSongsView() } label: {
-                        Label("Lieblingssongs (\(music.favorites.count))", systemImage: "heart.fill").foregroundStyle(GT.accent)
-                    }
+                NavigationLink { FavoriteSongsView() } label: {
+                    Label("Lieblingssongs (\(music.favorites.count))", systemImage: "heart.fill").foregroundStyle(GT.accent)
                 }
+                if !music.searchQuery.isEmpty { filterChips }
                 if let e = music.error { Text(e).foregroundStyle(music.sections.isEmpty ? Color.secondary : Color.red) }
                 ForEach(Array(music.sections.enumerated()), id: \.offset) { index, section in
                     Section(section.title) {
@@ -32,6 +31,13 @@ struct MusicView: View {
             .overlay { if music.loading && music.sections.isEmpty { ProgressView() } }
             .safeAreaInset(edge: .bottom) { MiniPlayer() }
             .navigationTitle("Musik")
+            .toolbar {
+                // Immer sichtbar (auch während der Suche), nicht nur als Listenzeile.
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { FavoriteSongsView() } label: { Image(systemName: "heart.fill").foregroundStyle(GT.accent) }
+                        .accessibilityLabel("Lieblingssongs")
+                }
+            }
             .navigationDestination(for: MusicCollection.self) { MusicDetailView(collection: $0) }
             .searchable(text: $query, prompt: "Songs, Alben, Interpreten")
             .onSubmit(of: .search) { Task { await music.search(query) } }
