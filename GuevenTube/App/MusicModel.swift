@@ -10,6 +10,11 @@ final class MusicModel: ObservableObject {
     @Published private(set) var sections: [MusicSection] = []
     @Published private(set) var error: String?
     @Published private(set) var loading = false
+    /// Liedtext des laufenden Titels (`nil`: nicht geladen oder keiner vorhanden, siehe [lyricsState]).
+    @Published private(set) var lyrics: MusicLyrics?
+    enum LyricsState: Equatable { case idle, loading, loaded, none, failed }
+    @Published private(set) var lyricsState: LyricsState = .idle
+    private var lyricsVideoId: String?
 
     private let app: AppModel
     private var rng = AnyRandom()
@@ -62,6 +67,27 @@ final class MusicModel: ObservableObject {
     func previous() { run(queue.previous(positionMs: app.player.positionMs)) }
     func toggleShuffle() { queue.toggleShuffle(using: &rng) }
     func cycleRepeat() { queue.cycleRepeat() }
+
+    /// Lädt den Liedtext des laufenden Titels (einmal je Titel; `retry` erzwingt einen neuen Versuch nach einem Fehler).
+    func loadLyrics(retry: Bool = false) async {
+        guard let song = queue.current else { return }
+        if lyricsVideoId == song.videoId, lyricsState != .idle, !(retry && lyricsState == .failed) { return }
+        lyricsVideoId = song.videoId; lyrics = nil; lyricsState = .loading
+        do {
+            let json = try await musicCall("next", [("videoId", .string(song.videoId)), ("playlistId", .string("RDAMVM\(song.videoId)")),
+                                                    ("isAudioOnly", .bool(true))])
+            guard let browseId = MusicParser.parseQueue(json).lyricsBrowseId else { finishLyrics(song.videoId, nil, .none); return }
+            let page = try await musicCall("browse", [("browseId", .string(browseId))])
+            if let text = MusicParser.parseLyrics(page) { finishLyrics(song.videoId, text, .loaded) } else { finishLyrics(song.videoId, nil, .none) }
+        } catch is CancellationError {
+            if lyricsVideoId == song.videoId { lyricsVideoId = nil; lyricsState = .idle }
+        } catch { finishLyrics(song.videoId, nil, .failed) }
+    }
+
+    private func finishLyrics(_ videoId: String, _ text: MusicLyrics?, _ state: LyricsState) {
+        guard lyricsVideoId == videoId else { return } // inzwischen anderer Titel
+        lyrics = text; lyricsState = state
+    }
 
     private func trackEnded() {
         // Nur reagieren, wenn der beendete Titel wirklich der Musiktitel ist (nicht ein später gestartetes Video).

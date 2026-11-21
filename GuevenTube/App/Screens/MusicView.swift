@@ -129,6 +129,15 @@ struct NowPlayingView: View {
     init(player: PlayerManager) { self._player = ObservedObject(wrappedValue: player) }
 
     var body: some View {
+        ScrollView {
+            content.padding(.horizontal, 24).padding(.bottom, 24)
+        }
+        .tint(GT.accent)
+        .presentationDragIndicator(.visible)
+        .task(id: music.queue.current?.videoId) { await music.loadLyrics() }
+    }
+
+    private var content: some View {
         VStack(spacing: 20) {
             Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }
                 .frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Schließen")
@@ -145,11 +154,28 @@ struct NowPlayingView: View {
                 }
                 progress
                 controls
+                lyricsSection
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 24).padding(.bottom, 16)
-        .tint(GT.accent)
+    }
+
+    @ViewBuilder private var lyricsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Liedtext").font(.headline)
+            switch music.lyricsState {
+            case .idle, .loading: ProgressView().frame(maxWidth: .infinity)
+            case .loaded:
+                if let l = music.lyrics {
+                    Text(l.text).font(.body).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                    if let source = l.source { Text(source).font(.caption).foregroundStyle(GT.secondaryText) }
+                }
+            case .none: Text("Für diesen Titel gibt es keinen Liedtext.").font(.subheadline).foregroundStyle(GT.secondaryText)
+            case .failed:
+                Text("Der Liedtext konnte nicht geladen werden.").font(.subheadline).foregroundStyle(GT.secondaryText)
+                Button("Erneut versuchen") { Task { await music.loadLyrics(retry: true) } }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
     }
 
     private var progress: some View {
@@ -239,6 +265,8 @@ struct MusicDetailView: View {
             }
         }
         .overlay { if detail == nil && error == nil { ProgressView() } }
+        // Sonst verschwindet die Steuerleiste, sobald man ein Album öffnet (die Leiste hängt sonst nur an der Startseite).
+        .safeAreaInset(edge: .bottom) { MiniPlayer() }
         .navigationTitle(collection.title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
