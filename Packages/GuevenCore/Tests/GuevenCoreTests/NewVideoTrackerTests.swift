@@ -35,10 +35,11 @@ final class NewVideoTrackerTests: XCTestCase {
         XCTAssertEqual(NewVideoTracker.nextSeen(["a", "b", "c"], ["x"], max: 3), ["a", "b", "c"], "aktueller Feed wird nie verdrängt")
     }
 
-    func testEmptyFeedOnFirstRunStillMarksInitialised() {
+    func testEmptyFeedDoesNotMarkTrackerInitialised() {
         let store = InMemoryStringStore(); let t = NewVideoTracker(store: store)
         _ = t.process([])
-        XCTAssertEqual(store.string("newvideos.seen"), "")
-        XCTAssertEqual(t.process([video("a")]).map(\.videoId), ["a"], "ab dem zweiten Lauf zählt alles Neue")
+        XCTAssertNil(store.string("newvideos.seen"))
+        XCTAssertTrue(t.process([video("a")]).isEmpty, "erster nichtleerer Feed wird nur gemerkt")
+        XCTAssertEqual(t.process([video("b"), video("a")]).map(\.videoId), ["b"])
     }
 }
