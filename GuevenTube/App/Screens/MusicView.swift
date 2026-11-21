@@ -176,8 +176,10 @@ struct NowPlayingView: View {
 
     var body: some View {
         ScrollView {
-            content.padding(.horizontal, 24).padding(.bottom, 24)
+            // Breite fest an die Sheet-Breite binden: ein langer Liedtext darf den Inhalt nicht breiter als den Bildschirm machen.
+            content.padding(.horizontal, 24).padding(.bottom, 24).containerRelativeFrame(.horizontal)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .tint(GT.accent)
         .presentationDragIndicator(.visible)
         .task(id: music.queue.current?.videoId) { await music.loadLyrics() }
@@ -219,7 +221,8 @@ struct NowPlayingView: View {
             case .idle, .loading: ProgressView().frame(maxWidth: .infinity)
             case .loaded:
                 if let l = music.lyrics {
-                    Text(l.text).font(.body).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                    Text(l.text).font(.body).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if let source = l.source { Text(source).font(.caption).foregroundStyle(GT.secondaryText) }
                 }
             case .none: Text("Für diesen Titel gibt es keinen Liedtext.").font(.subheadline).foregroundStyle(GT.secondaryText)
