@@ -266,7 +266,7 @@ public actor InnerTubeService {
         while true {
             var response: HTTPResponse?
             do {
-                response = try await execute(endpoint, client, body, accessToken)
+                response = try await execute(endpoint, client, body, accessToken, urlQuery: urlQuery)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -280,7 +280,7 @@ public actor InnerTubeService {
         }
     }
 
-    private func execute(_ endpoint: String, _ client: RequestClient, _ body: Data, _ accessToken: String?) async throws -> HTTPResponse {
+    private func execute(_ endpoint: String, _ client: RequestClient, _ body: Data, _ accessToken: String?, urlQuery: String = "") async throws -> HTTPResponse {
         var headers = [
             "User-Agent": client.userAgent, "Origin": client.origin, "Referer": client.referer,
             "X-YouTube-Client-Name": String(client.clientNameId), "X-YouTube-Client-Version": client.clientVersion,
