@@ -40,12 +40,12 @@ struct PlaylistsView: View {
         .task { await reload() }
     }
 
-    private func reload() async { lists = await library.playlists().filter { $0.name != LocalLibrary.watchLater } }
+    private func reload() async { lists = await library.playlists().filter { !LocalLibrary.reservedNames.contains($0.name) } }
 
     private func create() async {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        if name == LocalLibrary.watchLater { message = "Dieser Name ist reserviert."; return }
+        if LocalLibrary.reservedNames.contains(name) { message = "Dieser Name ist reserviert."; return }
         message = nil
         await library.playlistId(named: name)
         await reload()
@@ -56,7 +56,7 @@ struct PlaylistsView: View {
         let name = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
         renaming = nil
         guard !name.isEmpty else { return }
-        if name == LocalLibrary.watchLater { message = "Dieser Name ist reserviert."; return }
+        if LocalLibrary.reservedNames.contains(name) { message = "Dieser Name ist reserviert."; return }
         do { try await library.renamePlaylist(p.id, to: name); message = nil }
         catch { message = "Es gibt schon eine Playlist mit diesem Namen." }
         await reload()
@@ -125,7 +125,7 @@ struct AddToPlaylistMenu<MenuLabel: View>: View {
         } label: { label }
         .frame(minHeight: GT.Metric.touch)
         .onAppear {
-            Task { lists = await library.playlists().filter { $0.name != LocalLibrary.watchLater } }
+            Task { lists = await library.playlists().filter { !LocalLibrary.reservedNames.contains($0.name) } }
             Task { await loadAccountLists() }
         }
         .alert("Neue Konto-Playlist", isPresented: $newAccountList) {
@@ -147,7 +147,7 @@ struct AddToPlaylistMenu<MenuLabel: View>: View {
             TextField("Name", text: $newName)
             Button("Anlegen und hinzufügen") {
                 let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !name.isEmpty, name != LocalLibrary.watchLater else { return }
+                guard !name.isEmpty, !LocalLibrary.reservedNames.contains(name) else { return }
                 Task { let id = await library.playlistId(named: name); await library.add(video, to: id) }
             }
             Button("Abbrechen", role: .cancel) {}

@@ -9,7 +9,11 @@ struct MusicView: View {
     var body: some View {
         NavigationStack {
             List {
-                if !music.searchQuery.isEmpty { filterChips }
+                if !music.searchQuery.isEmpty { filterChips } else {
+                    NavigationLink { FavoriteSongsView() } label: {
+                        Label("Lieblingssongs (\(music.favorites.count))", systemImage: "heart.fill").foregroundStyle(GT.accent)
+                    }
+                }
                 if let e = music.error { Text(e).foregroundStyle(music.sections.isEmpty ? Color.secondary : Color.red) }
                 ForEach(Array(music.sections.enumerated()), id: \.offset) { index, section in
                     Section(section.title) {
@@ -39,6 +43,12 @@ struct MusicView: View {
         }
     }
 
+    private func likeButton(_ s: MusicSong) -> some View {
+        Button { music.toggleFavorite(s) } label: {
+            Label(music.isFavorite(s) ? "Gefällt mir nicht mehr" : "Gefällt mir", systemImage: music.isFavorite(s) ? "heart.slash" : "heart")
+        }.tint(GT.accent)
+    }
+
     private var filterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -65,6 +75,8 @@ struct MusicView: View {
         }
         if case .song(let s) = item {
             Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { content }.buttonStyle(.plain)
+                .swipeActions(edge: .trailing) { likeButton(s) }
+                .contextMenu { likeButton(s) }
         } else {
             if case .collection(let c) = item { NavigationLink(value: c) { content } }
         }
@@ -168,9 +180,16 @@ struct NowPlayingView: View {
             if let song = music.queue.current {
                 AsyncImage(url: URL(string: song.thumbnailUrl ?? "")) { $0.resizable().scaledToFill() } placeholder: { GT.surface }
                     .aspectRatio(1, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 12)).frame(maxHeight: 340)
-                VStack(spacing: 4) {
-                    Text(song.title).font(.title3.weight(.bold)).multilineTextAlignment(.center).lineLimit(2)
-                    Text(song.artists ?? "").foregroundStyle(GT.secondaryText).lineLimit(1)
+                HStack(spacing: 12) {
+                    VStack(spacing: 4) {
+                        Text(song.title).font(.title3.weight(.bold)).multilineTextAlignment(.center).lineLimit(2)
+                        Text(song.artists ?? "").foregroundStyle(GT.secondaryText).lineLimit(1)
+                    }.frame(maxWidth: .infinity)
+                    Button { music.toggleFavorite(song) } label: {
+                        Image(systemName: music.isFavorite(song) ? "heart.fill" : "heart").font(.title2)
+                            .foregroundStyle(music.isFavorite(song) ? GT.accent : Color.primary).frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel(music.isFavorite(song) ? "Gefällt mir entfernen" : "Gefällt mir")
                 }
                 if case .failed = player.state {
                     Text("Der Titel lässt sich nicht abspielen. Tippe auf „Nächster Titel“ oder versuche es später erneut.")
@@ -273,6 +292,14 @@ struct MusicDetailView: View {
                                     if let a = t.artists { Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                                 }
                             }.buttonStyle(.plain)
+                            .overlay(alignment: .trailing) {
+                                Image(systemName: "heart.fill").foregroundStyle(GT.accent).opacity(music.isFavorite(t) ? 1 : 0)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button { music.toggleFavorite(t) } label: {
+                                    Label(music.isFavorite(t) ? "Gefällt mir nicht mehr" : "Gefällt mir", systemImage: music.isFavorite(t) ? "heart.slash" : "heart")
+                                }.tint(GT.accent)
+                            }
                         }
                     }
                 }
@@ -302,5 +329,39 @@ struct MusicDetailView: View {
             detail = d
             if d.tracks.isEmpty && d.sections.isEmpty { error = "Keine Inhalte gefunden." }
         } catch { self.error = GTError.text(error) }
+    }
+}
+
+
+/// Lieblingssongs: alle gelikten Titel, neueste zuerst; „Alle abspielen“ und Zufallswiedergabe.
+struct FavoriteSongsView: View {
+    @EnvironmentObject var music: MusicModel
+
+    var body: some View {
+        List {
+            if music.favorites.isEmpty {
+                Text("Noch keine Lieblingssongs. Tippe im Player auf das Herz oder wische bei einem Titel nach links.")
+                    .foregroundStyle(GT.secondaryText).listRowBackground(GT.background)
+            } else {
+                Button { music.play(music.favorites, index: 0) } label: { Label("Alle abspielen", systemImage: "play.fill") }
+                ForEach(music.favorites, id: \.videoId) { s in
+                    Button { music.play(music.favorites, index: music.favorites.firstIndex(of: s) ?? 0) } label: {
+                        HStack(spacing: 12) {
+                            AsyncImage(url: URL(string: s.thumbnailUrl ?? "")) { $0.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.2) }
+                                .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 6))
+                            VStack(alignment: .leading) {
+                                Text(s.title).lineLimit(1)
+                                if let a = s.artists { Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                            }
+                        }
+                    }.buttonStyle(.plain)
+                    .swipeActions { Button("Entfernen", role: .destructive) { music.toggleFavorite(s) } }
+                }
+            }
+        }
+        .gtList()
+        .safeAreaInset(edge: .bottom) { MiniPlayer() }
+        .navigationTitle("Lieblingssongs")
+        .task { await music.reloadFavorites() }
     }
 }

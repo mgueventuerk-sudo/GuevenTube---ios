@@ -58,6 +58,10 @@ public struct DuplicatePlaylistName: Error, Equatable {}
 /// atomar und unter Linux testbar. Beschädigte Dateien beginnen leer, statt die App zu blockieren.
 public actor LocalLibrary {
     public static let watchLater = "Später ansehen"
+    /// Geliketen Musiktitel (eigene Liste, in „Meine Playlists“ ausgeblendet).
+    public static let favoriteSongs = "Lieblingssongs"
+    /// Namen, die Nutzer nicht selbst vergeben oder umbenennen dürfen.
+    public static let reservedNames: Set<String> = [watchLater, favoriteSongs]
     static let minResumePositionMs: Int64 = 30_000
     /// Obergrenze für Positionen/Dauern (ca. 31 Jahre).
     static let maxMs: Int64 = 1_000_000_000_000
@@ -255,6 +259,19 @@ public actor LocalLibrary {
     public func isInWatchLater(_ videoId: String) -> Bool { contains(videoId: videoId, in: playlistId(named: Self.watchLater)) }
     public func addToWatchLater(_ video: VideoItem) { add(video, to: playlistId(named: Self.watchLater)) }
     public func removeFromWatchLater(_ videoId: String) { remove(videoId: videoId, from: playlistId(named: Self.watchLater)) }
+
+    // MARK: Lieblingssongs
+
+    /// Neueste zuerst.
+    public func favoriteSongItems() -> [LocalPlaylistItem] { items(in: playlistId(named: Self.favoriteSongs)) }
+    public func favoriteSongIds() -> Set<String> {
+        guard let p = data.playlists.first(where: { $0.name == Self.favoriteSongs }) else { return [] }
+        return Set(data.items.lazy.filter { $0.playlistId == p.id }.map(\.videoId))
+    }
+    public func setFavoriteSong(_ video: VideoItem, liked: Bool) {
+        let id = playlistId(named: Self.favoriteSongs)
+        if liked { if !contains(videoId: video.videoId, in: id) { add(video, to: id) } } else { remove(videoId: video.videoId, from: id) }
+    }
 
     // MARK: Suchverlauf
 

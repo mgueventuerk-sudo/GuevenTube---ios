@@ -20,8 +20,32 @@ final class MusicModel: ObservableObject {
     private var rng = AnyRandom()
     private var endObserver: AnyCancellable?
 
+    /// Geliketen Titel (neueste zuerst) und ihre IDs für das Herz in Player und Listen.
+    @Published private(set) var favorites: [MusicSong] = []
+    @Published private(set) var favoriteIds: Set<String> = []
+    private let library = AppEnvironment.shared.library
+
+    func reloadFavorites() async {
+        let items = await library.favoriteSongItems()
+        favorites = items.map { MusicSong(videoId: $0.videoId, title: $0.title, artists: $0.channelName, album: nil,
+                                          thumbnailUrl: $0.thumbnailUrl, durationSeconds: $0.durationSeconds) }
+        favoriteIds = Set(items.map(\.videoId))
+    }
+
+    func isFavorite(_ song: MusicSong) -> Bool { favoriteIds.contains(song.videoId) }
+
+    func toggleFavorite(_ song: MusicSong) {
+        let liked = !favoriteIds.contains(song.videoId)
+        // Sofort im UI, dann speichern.
+        if liked { favoriteIds.insert(song.videoId) } else { favoriteIds.remove(song.videoId) }
+        let video = VideoItem(videoId: song.videoId, title: song.title, channelName: song.artists,
+                              thumbnailUrl: song.thumbnailUrl ?? InnerTubeParser.fallbackThumbnail(song.videoId), durationSeconds: song.durationSeconds)
+        Task { await library.setFavoriteSong(video, liked: liked); await reloadFavorites() }
+    }
+
     init(app: AppModel) {
         self.app = app
+        Task { await reloadFavorites() }
         endObserver = app.player.$state.removeDuplicates().sink { [weak self] state in
             if state == .ended { self?.trackEnded() }
         }

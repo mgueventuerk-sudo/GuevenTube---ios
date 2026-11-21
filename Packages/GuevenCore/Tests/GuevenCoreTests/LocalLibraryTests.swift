@@ -82,6 +82,16 @@ final class LocalLibraryTests: XCTestCase {
         let p = await l.playlists(); XCTAssertEqual(p.count, 1); XCTAssertEqual(p[0].itemCount, 1)
     }
 
+    func testFavoriteSongsToggleIdempotentAndSeparateFromWatchLater() async {
+        let l = lib()
+        await l.setFavoriteSong(video("a"), liked: true); await l.setFavoriteSong(video("a"), liked: true); await l.setFavoriteSong(video("b"), liked: true)
+        let ids = await l.favoriteSongIds(); XCTAssertEqual(ids, ["a", "b"])
+        let items = await l.favoriteSongItems(); XCTAssertEqual(items.count, 2)
+        await l.setFavoriteSong(video("a"), liked: false)
+        let after = await l.favoriteSongIds(); XCTAssertEqual(after, ["b"])
+        let w = await l.watchLaterItems(); XCTAssertTrue(w.isEmpty)
+    }
+
     func testPlaylistsUniqueNameCascadeOrder() async throws {
         let l = lib()
         let a = await l.playlistId(named: "A"); let b = await l.playlistId(named: "B")
