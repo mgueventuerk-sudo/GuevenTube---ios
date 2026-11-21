@@ -309,7 +309,9 @@ public enum InnerTubeParser {
         }
         if chapters.isEmpty {
             for node in root.findAll("macroMarkersListItemRenderer") {
-                guard let seconds = node.path("onTap", "watchEndpoint").long("startTimeSeconds"), let title = node.text("title") else { continue }
+                // Obergrenze: `seconds * 1000` würde bei absurden Werten aus der Antwort überlaufen und die App abstürzen lassen.
+                guard let seconds = node.path("onTap", "watchEndpoint").long("startTimeSeconds"), (0...1_000_000_000).contains(seconds),
+                      let title = node.text("title") else { continue }
                 if chapters[seconds * 1000] == nil { chapters[seconds * 1000] = Chapter(title: title, startMs: seconds * 1000) }
             }
         }
@@ -529,7 +531,7 @@ public enum InnerTubeParser {
         if parts.isEmpty || parts.count > 3 { return nil }
         var total: Int64 = 0
         for part in parts {
-            guard let v = Int64(part.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+            guard let v = Int64(part.trimmingCharacters(in: .whitespacesAndNewlines)), (0...100_000_000).contains(v) else { return nil }
             total = total * 60 + v
         }
         return total

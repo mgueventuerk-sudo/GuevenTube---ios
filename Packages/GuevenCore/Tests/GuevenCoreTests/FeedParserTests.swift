@@ -191,4 +191,11 @@ final class FeedParserTests: XCTestCase {
         XCTAssertThrowsError(try JSONParser.parse("[1,]"))
         XCTAssertThrowsError(try JSONParser.parse(String(repeating: "[", count: 5000)))
     }
+
+    func testParseDurationRejectsOverflowingParts() {
+        XCTAssertEqual(InnerTubeParser.parseDuration("1:02:03"), 3723)
+        XCTAssertNil(InnerTubeParser.parseDuration("9223372036854775807:59:59"))
+        XCTAssertNil(MusicParser.parseDuration("9223372036854775807:59"))
+        XCTAssertEqual(MusicParser.parseDuration("3:05"), 185)
+    }
 }

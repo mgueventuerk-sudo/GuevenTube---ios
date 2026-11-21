@@ -109,7 +109,12 @@ public actor DownloadStore {
 }
 
 /// Startet die eigentliche Arbeit (iOS: Hintergrund-`URLSession`).
-public protocol DownloadScheduling: Sendable { func schedule(downloadId: Int64) async }
+public protocol DownloadScheduling: Sendable {
+    func schedule(downloadId: Int64) async
+    /// Bricht laufende Übertragungen ab und räumt Zwischendateien auf (beim Löschen eines Auftrags).
+    func cancel(downloadId: Int64) async
+}
+public extension DownloadScheduling { func cancel(downloadId: Int64) async {} }
 
 /// Legt Download-Aufträge an (ein Eintrag pro markiertem Video) und stößt je Eintrag die Ausführung an. Jeder Download
 /// läuft unabhängig – ein gescheiterter darf nie andere mit sich reißen.
@@ -152,6 +157,7 @@ public actor DownloadRepository {
 
     /// Entfernt Auftrag und – falls vorhanden – die fertige Datei.
     public func delete(_ record: DownloadRecord) async {
+        if record.status == .queued || record.status == .running { await scheduler.cancel(downloadId: record.id) }
         if let loc = record.fileLocation { await removeFile(loc) }
         await store.delete(record.id)
     }

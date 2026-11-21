@@ -5,6 +5,9 @@ final class FakeScheduler: DownloadScheduling, @unchecked Sendable {
     private let lock = NSLock(); private var ids: [Int64] = []
     var scheduled: [Int64] { lock.withLock { ids } }
     func schedule(downloadId: Int64) async { lock.withLock { ids.append(downloadId) } }
+    private var cancelledIds: [Int64] = []
+    var cancelled: [Int64] { lock.withLock { cancelledIds } }
+    func cancel(downloadId: Int64) async { lock.withLock { cancelledIds.append(downloadId) } }
 }
 
 final class DownloadsTests: XCTestCase {
@@ -162,6 +165,15 @@ final class DownloadsTests: XCTestCase {
 
         let before = sched.scheduled.count
         await repo.resumePending(); XCTAssertEqual(Array(sched.scheduled.dropFirst(before)), [3, 4])
+    }
+
+    func testDeleteCancelsOnlyUnfinishedDownloads() async {
+        let store = DownloadStore(), sched = FakeScheduler()
+        let repo = DownloadRepository(store: store, scheduler: sched, nowMs: { 1 })
+        await repo.enqueue([DownloadRequestItem(videoId: "a", title: "A"), DownloadRequestItem(videoId: "b", title: "B")], quality: .audioOnly)
+        await store.setDone(2, location: "B.m4a", bytes: 1, now: 2)
+        await repo.delete(await store.get(1)!); await repo.delete(await store.get(2)!)
+        XCTAssertEqual(sched.cancelled, [1], "laufender Auftrag wird gestoppt, fertiger nicht")
     }
 
     func testUpdatesStream() async {

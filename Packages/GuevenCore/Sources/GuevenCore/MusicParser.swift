@@ -71,7 +71,7 @@ public enum MusicParser {
         guard !parts.isEmpty, parts.count <= 3 else { return nil }
         var total: Int64 = 0
         for part in parts {
-            guard let n = Int64(part) else { return nil }
+            guard let n = Int64(part), (0...100_000_000).contains(n) else { return nil } // Überlaufschutz
             total = total * 60 + n
         }
         return total

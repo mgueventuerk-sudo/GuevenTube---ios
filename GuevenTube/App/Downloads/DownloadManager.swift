@@ -77,6 +77,13 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
         }
     }
 
+    /// Auftrag wurde gelöscht: Übertragungen stoppen, Zwischendateien und Zähler entfernen (sonst lädt iOS im Hintergrund weiter).
+    func cancel(downloadId id: Int64) async {
+        for task in await session.allTasks where info(task)?.id == id { task.cancel() }
+        lock.withLock { parts[id] = nil; lastTick[id] = nil }
+        try? fm.removeItem(at: staging(id))
+    }
+
     /// Fehler eintragen und den zweiten Teil (Bild/Ton) stoppen: Er würde sonst unnütz Daten laden.
     private func fail(_ id: Int64, _ message: String) async {
         await store.setFailed(id, message: message, now: Self.now())

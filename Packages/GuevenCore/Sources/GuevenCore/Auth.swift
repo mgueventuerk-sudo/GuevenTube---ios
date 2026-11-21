@@ -175,7 +175,7 @@ public actor OAuthClient {
         }
         return DeviceCodeResponse(deviceCode: deviceCode, userCode: userCode,
                                   verificationUrl: element.str("verification_url") ?? DeviceCodeResponse.defaultVerificationUrl,
-                                  expiresInSeconds: element.long("expires_in") ?? 1800, intervalSeconds: element.long("interval") ?? 5)
+                                  expiresInSeconds: min(max(element.long("expires_in") ?? 1800, 0), 31_536_000), intervalSeconds: min(max(element.long("interval") ?? 5, 0), 3_600))
     }
 
     public func pollToken(deviceCode: String, client: OAuthClientCredentials? = nil) async throws -> TokenPollResult {
