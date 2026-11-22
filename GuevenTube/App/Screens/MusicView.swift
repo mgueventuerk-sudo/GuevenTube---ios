@@ -118,11 +118,48 @@ struct MiniPlayer: View {
             if let song = music.queue.current, app.current?.videoId == song.videoId {
                 // Der Player ist ein eigenes ObservableObject: nur so zeichnet sich die Leiste bei Zustandswechseln neu.
                 MiniPlayerBar(song: song, player: app.player) { showFull = true }
+            } else if let v = app.current, !app.showPlayer {
+                VideoMiniBar(video: v, player: app.player)
             }
         }
         .sheet(isPresented: $showFull) {
             NowPlayingView(player: app.player).environmentObject(music).environmentObject(app)
         }
+    }
+}
+
+/// Minimierter Video-Player: Ton läuft weiter; Antippen öffnet wieder, X beendet.
+private struct VideoMiniBar: View {
+    let video: VideoItem
+    @ObservedObject var player: PlayerManager
+    @EnvironmentObject var app: AppModel
+
+    init(video: VideoItem, player: PlayerManager) { self.video = video; self._player = ObservedObject(wrappedValue: player) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ProgressView(value: min(1, Double(player.positionMs) / Double(max(1, player.durationMs))))
+                .tint(GT.accent).scaleEffect(x: 1, y: 0.5)
+            HStack(spacing: 4) {
+                Button { app.showPlayer = true } label: {
+                    HStack(spacing: 10) {
+                        AsyncImage(url: URL(string: video.thumbnailUrl)) { $0.resizable().scaledToFill() } placeholder: { GT.surface }
+                            .frame(width: 64, height: 36).clipShape(RoundedRectangle(cornerRadius: 6))
+                        VStack(alignment: .leading) {
+                            Text(video.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            Text(video.channelName ?? "").font(.caption).foregroundStyle(GT.secondaryText).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }.contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel("Player öffnen")
+                Button { player.toggle() } label: { PlayPauseIcon(state: player.state).font(.title2).frame(width: 44, height: 44) }
+                    .accessibilityLabel(player.state == .playing ? "Pause" : "Abspielen")
+                Button { app.closePlayer() } label: { Image(systemName: "xmark").frame(width: 40, height: 44) }
+                    .accessibilityLabel("Wiedergabe beenden")
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+        }
+        .tint(GT.accent).background(.regularMaterial)
     }
 }
 

@@ -26,6 +26,7 @@ enum OrientationControl {
 /// Alle Aktionen des Players an einer Stelle; Reihenfolge der Chips ist fest: speichern → laden → Info.
 struct PlayerActions {
     var close: () -> Void = {}
+    var minimize: () -> Void = {}
     var skip: () -> Void = {}
     var openChannel: () -> Void = {}
     var watchLater: () -> Void = {}
@@ -84,7 +85,7 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
         }
         // Links oben immer „Schließen“, rechts oben „Ausrichtung“; unten rechts „Überspringen“.
         .overlay(alignment: .topLeading) {
-            overlayButton("chevron.down", label: "Player schließen", action: actions.close)
+            overlayButton("chevron.down", label: "Player minimieren", action: actions.minimize)
         }
         .overlay(alignment: .topTrailing) {
             overlayButton(isLandscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
@@ -172,7 +173,7 @@ struct PlayerScreen: View {
                         errorText: errorText, isLoading: { if case .loading = player.state { return true } else { return false } }(),
                         skipLabel: app.skipPrompt.map { "\($0.category.displayName) überspringen" },
                         actions: PlayerActions(
-                            close: { app.closePlayer() }, skip: { app.skipPrompted() },
+                            close: { app.closePlayer() }, minimize: { app.showPlayer = false }, skip: { app.skipPrompted() },
                             openChannel: { if let id = v.channelId, let name = v.channelName { app.channelRoute = ChannelRef(channelId: id, name: name) } },
                             watchLater: { Task { await AppEnvironment.shared.library.addToWatchLater(v) } },
                             showTranscript: { showTranscript = true }, showComments: { showComments = true }, showChat: { showChat = true }),
