@@ -67,6 +67,7 @@ struct PlaylistDetailView: View {
     @EnvironmentObject var app: AppModel
     let playlist: LocalPlaylistWithCount
     @State private var items: [VideoItem] = []
+    @StateObject private var downloads = DownloadsModel()
     private let library = AppEnvironment.shared.library
 
     var body: some View {
@@ -74,6 +75,7 @@ struct PlaylistDetailView: View {
             if items.isEmpty { Text("Die Playlist ist leer. Im Player über „Zu Playlist“ hinzufügen.").foregroundStyle(.secondary) }
             if !items.isEmpty {
                 Button { app.playQueue(items) } label: { Label("Alle abspielen", systemImage: "play.fill") }
+                DownloadAllMenu(videos: items, downloads: downloads)
             }
             ForEach(items, id: \.videoId) { v in
                 VideoRow(item: v)
@@ -82,6 +84,7 @@ struct PlaylistDetailView: View {
         }
         .gtList()
         .navigationTitle(playlist.name)
+        .downloadNotice(downloads)
         .task { await reload() }
     }
 

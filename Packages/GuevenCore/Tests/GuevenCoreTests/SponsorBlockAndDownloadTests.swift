@@ -190,6 +190,16 @@ final class DownloadQualityTests: XCTestCase {
         XCTAssertEqual(DownloadQualityResolver.resolve(only, quality: .sd)?.videoFormat?.itag, 5, "nichts darunter: kleinste verfügbare")
     }
 
+    func testAudioPrefersOriginalLanguageOverHigherBitrateDub() {
+        var dub = audio(10, br: 256); dub.xtags = "acont=dubbed-auto:lang=en-US"; dub.audioIsDefault = false
+        var orig = audio(11, br: 128); orig.xtags = "acont=original:lang=de"
+        XCTAssertEqual(DownloadQualityResolver.bestAudio([dub, orig])?.itag, 11, "Original schlägt höhere Bitrate der Synchronfassung")
+        var dubDefault = audio(12, br: 256); dubDefault.xtags = "acont=dubbed-auto:lang=en"
+        let plain = audio(13, br: 128)
+        XCTAssertEqual(DownloadQualityResolver.bestAudio([dubDefault, plain])?.itag, 13, "ohne Original-Marke: Spur ohne dubbed-Marke")
+        XCTAssertEqual(DownloadQualityResolver.bestAudio([dubDefault])?.itag, 12, "nur eine Spur: nehmen")
+    }
+
     func testHigherFrameRateWinsAtSameHeightAndLabelFallsBack() {
         let p = playback([video(1, 1080, fps: 30), video(2, 1080, fps: 60), audio(9, br: 128)])
         XCTAssertEqual(DownloadQualityResolver.resolve(p, quality: .fullHd)?.videoFormat?.itag, 2)

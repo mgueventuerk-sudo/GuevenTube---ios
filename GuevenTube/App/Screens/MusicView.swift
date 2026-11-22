@@ -5,6 +5,7 @@ struct MusicView: View {
     @EnvironmentObject var music: MusicModel
     @EnvironmentObject var app: AppModel
     @State private var query = ""
+    @StateObject private var downloads = DownloadsModel()
 
     var body: some View {
         NavigationStack {
@@ -28,6 +29,7 @@ struct MusicView: View {
                 if music.loadingMore { ProgressView().frame(maxWidth: .infinity) }
             }
             .gtList()
+            .downloadNotice(downloads)
             .overlay { if music.loading && music.sections.isEmpty { ProgressView() } }
             .navigationTitle("Musik")
             .toolbar {
@@ -46,6 +48,10 @@ struct MusicView: View {
             }
             .task { if music.sections.isEmpty { await music.loadHome() } }
         }
+    }
+
+    private func downloadButton(_ s: MusicSong) -> some View {
+        Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }.tint(.blue)
     }
 
     private func likeButton(_ s: MusicSong) -> some View {
@@ -82,8 +88,8 @@ struct MusicView: View {
         .contentShape(Rectangle())
         if case .song(let s) = item {
             Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { content }.buttonStyle(.plain)
-                .swipeActions(edge: .trailing) { likeButton(s) }
-                .contextMenu { likeButton(s) }
+                .swipeActions(edge: .trailing) { likeButton(s); downloadButton(s) }
+                .contextMenu { likeButton(s); downloadButton(s) }
         } else {
             if case .collection(let c) = item { NavigationLink(value: c) { content } }
         }
@@ -210,6 +216,7 @@ struct NowPlayingView: View {
     @EnvironmentObject var music: MusicModel
     @Environment(\.dismiss) private var dismiss
     @State private var scrubbing: Double?
+    @StateObject private var downloads = DownloadsModel()
 
     init(player: PlayerManager) { self._player = ObservedObject(wrappedValue: player) }
 
@@ -225,6 +232,7 @@ struct NowPlayingView: View {
         }
         .tint(GT.accent)
         .presentationDragIndicator(.visible)
+        .downloadNotice(downloads)
         .task(id: music.queue.current?.videoId) { await music.loadLyrics() }
     }
 
@@ -246,6 +254,9 @@ struct NowPlayingView: View {
                             .foregroundStyle(music.isFavorite(song) ? GT.accent : Color.primary).frame(width: 44, height: 44)
                     }
                     .accessibilityLabel(music.isFavorite(song) ? "Gefällt mir entfernen" : "Gefällt mir")
+                    Button { downloads.enqueue(songs: [song]) } label: {
+                        Image(systemName: "arrow.down.circle").font(.title2).frame(width: 44, height: 44)
+                    }.accessibilityLabel("Titel herunterladen")
                 }
                 if case .failed = player.state {
                     Text("Der Titel lässt sich nicht abspielen. Tippe auf „Nächster Titel“ oder versuche es später erneut.")
@@ -322,6 +333,7 @@ struct MusicDetailView: View {
     let collection: MusicCollection
     @State private var detail: MusicDetail?
     @State private var error: String?
+    @StateObject private var downloads = DownloadsModel()
 
     var body: some View {
         List {
@@ -338,6 +350,7 @@ struct MusicDetailView: View {
                     }
                     if !d.tracks.isEmpty {
                         Button { music.play(d.tracks, index: 0) } label: { Label("Alle abspielen", systemImage: "play.fill") }
+                        Button { downloads.enqueue(songs: d.tracks) } label: { Label("Alle herunterladen (\(d.tracks.count))", systemImage: "arrow.down.circle") }
                     }
                 }
                 if !d.tracks.isEmpty {
@@ -360,6 +373,7 @@ struct MusicDetailView: View {
                                 Button { music.toggleFavorite(t) } label: {
                                     Label(music.isFavorite(t) ? "Gefällt mir nicht mehr" : "Gefällt mir", systemImage: music.isFavorite(t) ? "heart.slash" : "heart")
                                 }.tint(GT.accent)
+                                Button { downloads.enqueue(songs: [t]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }.tint(.blue)
                             }
                         }
                     }
@@ -379,6 +393,7 @@ struct MusicDetailView: View {
         .overlay { if detail == nil && error == nil { ProgressView() } }
         .navigationTitle(collection.title)
         .navigationBarTitleDisplayMode(.inline)
+        .downloadNotice(downloads)
         .task { await load() }
     }
 
@@ -395,6 +410,7 @@ struct MusicDetailView: View {
 /// Lieblingssongs: alle gelikten Titel, neueste zuerst; „Alle abspielen“ und Zufallswiedergabe.
 struct FavoriteSongsView: View {
     @EnvironmentObject var music: MusicModel
+    @StateObject private var downloads = DownloadsModel()
 
     var body: some View {
         List {
@@ -403,6 +419,7 @@ struct FavoriteSongsView: View {
                     .foregroundStyle(GT.secondaryText).listRowBackground(GT.background)
             } else {
                 Button { music.play(music.favorites, index: 0) } label: { Label("Alle abspielen", systemImage: "play.fill") }
+                Button { downloads.enqueue(songs: music.favorites) } label: { Label("Alle herunterladen (\(music.favorites.count))", systemImage: "arrow.down.circle") }
                 ForEach(music.favorites, id: \.videoId) { s in
                     Button { music.play(music.favorites, index: music.favorites.firstIndex(of: s) ?? 0) } label: {
                         HStack(spacing: 12) {
@@ -421,6 +438,7 @@ struct FavoriteSongsView: View {
         }
         .gtList()
         .navigationTitle("Lieblingssongs")
+        .downloadNotice(downloads)
         .task { await music.reloadFavorites() }
     }
 }

@@ -64,7 +64,20 @@ public enum DownloadQualityResolver {
     public static func bestAudio(_ formats: [StreamFormat]) -> StreamFormat? {
         var candidates = formats.filter { $0.isAudio && !$0.isDrc }
         if candidates.isEmpty { candidates = formats.filter { $0.isAudio } }
+        candidates = originalLanguage(candidates)
         return maxByBitrate(commonAudio(candidates)) ?? maxByBitrate(candidates)
+    }
+
+    /// Videos mit mehreren Tonspuren (automatische Synchronisation): Ohne Auswahl gewann die Spur mit der höchsten Bitrate – oft eine
+    /// fremdsprachige. Vorrang hat die als Original markierte Spur (`acont=original`), sonst die Standardspur ohne „dubbed“-Marke.
+    public static func originalLanguage(_ formats: [StreamFormat]) -> [StreamFormat] {
+        func tags(_ f: StreamFormat) -> String { (f.xtags ?? "").lowercased() }
+        let original = formats.filter { tags($0).contains("acont=original") }
+        if !original.isEmpty { return original }
+        let standard = formats.filter { $0.audioIsDefault && !tags($0).contains("dubbed") }
+        if !standard.isEmpty { return standard }
+        let notDubbed = formats.filter { !tags($0).contains("dubbed") }
+        return notDubbed.isEmpty ? formats : notDubbed
     }
 
     /// Erstes Maximum (wie `maxByOrNull`).
