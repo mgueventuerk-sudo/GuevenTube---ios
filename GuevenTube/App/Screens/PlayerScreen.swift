@@ -46,15 +46,16 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
     let isLoading: Bool
     let skipLabel: String?
     let actions: PlayerActions
+    var related: [VideoItem] = []
     let surface: Surface
     let playlistMenu: Playlist
     let downloadMenu: Download
 
     init(isLandscape: Bool, video: VideoItem, hasCaptions: Bool, qualityText: String?, errorText: String?, isLoading: Bool,
-         skipLabel: String?, actions: PlayerActions,
+         skipLabel: String?, actions: PlayerActions, related: [VideoItem] = [],
          @ViewBuilder surface: () -> Surface, @ViewBuilder playlistMenu: () -> Playlist, @ViewBuilder downloadMenu: () -> Download) {
         self.isLandscape = isLandscape; self.video = video; self.hasCaptions = hasCaptions; self.qualityText = qualityText
-        self.errorText = errorText; self.isLoading = isLoading; self.skipLabel = skipLabel; self.actions = actions
+        self.errorText = errorText; self.isLoading = isLoading; self.skipLabel = skipLabel; self.actions = actions; self.related = related
         self.surface = surface(); self.playlistMenu = playlistMenu(); self.downloadMenu = downloadMenu()
     }
 
@@ -117,6 +118,12 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
                 channelRow
                 if let qualityText { Text(qualityText).font(.caption).foregroundStyle(GT.secondaryText) }
                 chips
+                if !related.isEmpty {
+                    Text("Empfohlen").font(.headline).padding(.top, 12)
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(related, id: \.videoId) { VideoRow(item: $0, style: .compact) }
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, GT.Metric.page).padding(.top, 12)
@@ -177,6 +184,7 @@ struct PlayerScreen: View {
                             openChannel: { if let id = v.channelId, let name = v.channelName { app.channelRoute = ChannelRef(channelId: id, name: name) } },
                             watchLater: { Task { await AppEnvironment.shared.library.addToWatchLater(v) } },
                             showTranscript: { showTranscript = true }, showComments: { showComments = true }, showChat: { showChat = true }),
+                        related: app.related,
                         surface: { SystemPlayer(player: player.player) },
                         playlistMenu: {
                             AddToPlaylistMenu(video: v) { ChipLabel(title: "Playlist", systemImage: "text.badge.plus") }

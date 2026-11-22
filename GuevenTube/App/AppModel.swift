@@ -12,6 +12,8 @@ final class AppModel: ObservableObject {
     @Published var showPlayer = false
     /// Kanalseite als Sheet; im Player und außerhalb davon je ein eigenes Sheet (zwei Sheets gleichzeitig gehen nicht).
     @Published var channelRoute: ChannelRef?
+    /// Empfohlene Videos zum laufenden Video (unter dem Player).
+    @Published private(set) var related: [VideoItem] = []
     @Published private(set) var skipPrompt: SponsorSegment?
     /// Untertitelspuren des laufenden Videos (für das Transkript).
     @Published private(set) var captions: [CaptionTrack] = []
@@ -51,6 +53,14 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func loadRelated(_ id: String) {
+        Task { [weak self] in
+            guard let self, let json = try? await env.innerTube.next(videoId: id) else { return }
+            let items = InnerTubeParser.parseWatchNext(json, videoId: id).related
+            if current?.videoId == id { related = items }
+        }
+    }
+
     /// Spielt [items] nacheinander; jedes andere `play` beendet die Reihenfolge.
     func playQueue(_ items: [VideoItem]) {
         guard let first = items.first else { return }
@@ -78,6 +88,8 @@ final class AppModel: ObservableObject {
         current = item
         skipPlanner = nil; skipPrompt = nil; captions = []
         playbackError = nil
+        related = []
+        if !audioOnly { loadRelated(item.videoId) }
         self.showPlayer = showPlayer
         task = Task { [weak self] in
             guard let self else { return }
