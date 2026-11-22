@@ -49,7 +49,8 @@ struct RootView: View {
         .overlay { if let b = kids.block, !app.showPlayer { KidsBlockView(reason: b.reason).environmentObject(kids) } }
         .sheet(item: Binding(get: { app.showPlayer ? nil : app.channelRoute }, set: { app.channelRoute = $0 })) { c in
             NavigationStack { ChannelView(channel: c).doneToolbar { app.channelRoute = nil } }
-                .environmentObject(app)
+                .withMiniPlayer()
+                .environmentObject(app).environmentObject(music)
         }
         .onReceive(NotificationCenter.default.publisher(for: NewVideosService.openVideoNotification)) { n in
             if let v = n.object as? VideoItem { NewVideosService.pendingVideo = nil; app.play(v) }

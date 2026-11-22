@@ -31,6 +31,7 @@ final class PlayerManager: ObservableObject {
     private var timeObserver: Any?
     private var itemObservers: [AnyCancellable] = []
     private var statusObserver: AnyCancellable?
+    private var interruptionObserver: AnyCancellable?
     private var loadTask: Task<Void, Never>?
     private var info: NowPlaying?
     private var remoteTargets: [(MPRemoteCommand, Any)] = []
@@ -49,6 +50,17 @@ final class PlayerManager: ObservableObject {
             else if status == .playing, self.state == .paused { self.state = .playing; self.publishNowPlaying() }
         }
         configureRemoteCommands()
+        // Nach Anruf/Siri/Wecker: Wiedergabe fortsetzen, wenn iOS es empfiehlt (auch bei gesperrtem Bildschirm).
+        interruptionObserver = NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main).sink { [weak self] n in
+                guard let self, let raw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                      AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
+                let opts = (n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt).map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
+                if opts.contains(.shouldResume), self.state == .paused {
+                    try? AVAudioSession.sharedInstance().setActive(true)
+                    self.resume()
+                }
+            }
     }
 
     deinit {
