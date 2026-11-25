@@ -17,6 +17,8 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
     private let store: DownloadStore
     private let resolver: StreamResolver
     private let fm = FileManager.default
+    /// Mindestabstand zwischen den Auflösungen der Aufträge (Sammel-Downloads dürfen nicht wie ein Skript wirken).
+    private let pacer = RequestPacer()
     private let lock = NSLock()
     /// Je Auftrag: geschriebene Bytes je Übertragung (Schlüssel „Rolle|Start“) und Gesamtgröße je Rolle (Bild/Ton).
     private var written: [Int64: [String: Int64]] = [:]
@@ -66,6 +68,7 @@ final class DownloadManager: NSObject, DownloadScheduling, URLSessionDownloadDel
         let now = Self.now()
         await store.setStatus(downloadId, .running, now: now)
         do {
+            await pacer.wait()
             let playback = try await resolver.resolve(record.videoId, forceRefresh: true, trackAsLastRequested: false)
             guard let formats = DownloadPlanner.resolveFormats(playback, record) else {
                 await store.setFailed(downloadId, message: "Kein passendes Format gefunden", now: Self.now()); return

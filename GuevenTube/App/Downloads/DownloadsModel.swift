@@ -92,11 +92,11 @@ final class DownloadsModel: ObservableObject {
             // Obergrenze je Aktion: große Sammelaufträge sehen für YouTube nach Scraping aus (Bot-Erkennung).
             let capped = Array(items.prefix(Self.maxBulk))
             let fresh = capped.filter { seen.insert($0.videoId).inserted }
-            if !fresh.isEmpty { await repo.enqueue(fresh, quality: quality) }
             let skipped = capped.count - fresh.count
             let cut = items.count - capped.count
             notice = fresh.isEmpty ? "Schon in den Downloads." :
                 "\(fresh.count) \(fresh.count == 1 ? "Download" : "Downloads") gestartet" + (skipped > 0 ? " (\(skipped) schon vorhanden)" : "") + (cut > 0 ? " Begrenzt auf \(Self.maxBulk) je Aktion (Schutz vor Sperren); \(cut) nicht eingereiht." : "") + ". Fortschritt unter Konto → Downloads."
+            if !fresh.isEmpty { await repo.enqueue(fresh, quality: quality) } // läuft mit Pausen weiter, Hinweis steht schon
         }
     }
     func retry(_ r: DownloadRecord) { Task { await repo.retry(r) } }

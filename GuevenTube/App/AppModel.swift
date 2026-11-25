@@ -29,6 +29,11 @@ final class AppModel: ObservableObject {
     /// Wie oft für das aktuelle Video nach einer Ablehnung durch den Videoserver ein anderer Weg versucht wurde.
     private var routeRetries = 0
     private var lastReresolve = Date.distantPast
+    /// Für dieses Video wurde schon eine automatische Wiederherstellung versucht (höchstens eine).
+    private var recoveredFor: String?
+    /// Wird gerufen, wenn ein Titel auch nach der Wiederherstellung nicht spielt (Musik überspringt dann).
+    var onUnplayable: ((VideoItem) -> Void)?
+    private var failureObserver: AnyCancellable?
     /// Läuft gerade nur der Ton (Musik oder „Nur Ton“ im Video-Player)?
     @Published private(set) var lastAudioOnly = false
 
@@ -37,6 +42,7 @@ final class AppModel: ObservableObject {
         player.onPosition = { [weak self] ms in self?.handleSkip(ms) }
         endObserver = player.$state.removeDuplicates().sink { [weak self] state in
             if state == .ended { self?.playNextInQueue() }
+            if case .failed = state { self?.handleFailure() }
         }
     }
 
@@ -87,6 +93,7 @@ final class AppModel: ObservableObject {
             autoplayAllowed = !audioOnly && !keepQueue
         }
         lastAudioOnly = audioOnly
+        if !isRouteRetry, current?.videoId != item.videoId { recoveredFor = nil }
         current = item
         skipPlanner = nil; skipPrompt = nil; captions = []
         playbackError = nil
@@ -123,14 +130,27 @@ final class AppModel: ObservableObject {
             } catch is CancellationError {
             } catch {
                 playbackError = Self.describe(error)
+                handleFailure()
             }
         }
     }
 
+    /// Automatisch: erst einmal neu auflösen (anderer Weg, frische URLs); hilft das nicht, meldet `onUnplayable`
+    /// (Musik springt weiter, Video zeigt den eingebetteten Player).
+    private func handleFailure() {
+        guard let item = current else { return }
+        if recoveredFor != item.videoId {
+            recoveredFor = item.videoId
+            reresolve(force: true)
+        } else {
+            onUnplayable?(item)
+        }
+    }
+
     /// „Neu auflösen“: Zwischenspeicher dieses Videos verwerfen und an derselben Stelle neu starten.
-    func reresolve() {
+    func reresolve(force: Bool = false) {
         // Abkühlzeit: wiederholtes Tippen darf keine Anfragewelle (Bot-Muster) auslösen.
-        guard let item = current, Date().timeIntervalSince(lastReresolve) > 30 else { playbackError = playbackError ?? "Bitte kurz warten (30 s) vor dem nächsten Neu-Auflösen."; return }
+        guard let item = current, force || Date().timeIntervalSince(lastReresolve) > 30 else { playbackError = playbackError ?? "Bitte kurz warten (30 s) vor dem nächsten Neu-Auflösen."; return }
         lastReresolve = Date()
         let pos = player.positionMs, audioOnly = lastAudioOnly, show = showPlayer
         Task { [weak self] in

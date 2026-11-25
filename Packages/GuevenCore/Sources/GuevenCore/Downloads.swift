@@ -132,12 +132,14 @@ public actor DownloadRepository {
     /// Je markiertem Item + gewählter Qualität ein Auftrag.
     public func enqueue(_ items: [DownloadRequestItem], quality: DownloadQuality, threadCount: Int = 4) async {
         let kind: DownloadKind = quality == .audioOnly ? .audio : .video
+        // Erst alle Aufträge anlegen (sofort in der Liste sichtbar), dann nacheinander starten: der Scheduler darf dabei pausieren.
+        var ids: [Int64] = []
         for item in items {
             let now = nowMs()
-            let id = await store.insert(DownloadRecord(id: 0, videoId: item.videoId, title: item.title, channelName: item.channelName, thumbnailUrl: item.thumbnailUrl,
-                kind: kind, qualityLabel: quality.label, status: .queued, requestedQuality: quality.rawValue, threadCount: threadCount, createdAt: now, updatedAt: now))
-            await scheduler.schedule(downloadId: id)
+            ids.append(await store.insert(DownloadRecord(id: 0, videoId: item.videoId, title: item.title, channelName: item.channelName, thumbnailUrl: item.thumbnailUrl,
+                kind: kind, qualityLabel: quality.label, status: .queued, requestedQuality: quality.rawValue, threadCount: threadCount, createdAt: now, updatedAt: now)))
         }
+        for id in ids { await scheduler.schedule(downloadId: id) }
     }
 
     /// Mit genau gewähltem Format: Video+Ton, nur Ton oder Untertitel.

@@ -51,6 +51,8 @@ final class MusicModel: ObservableObject {
     }
 
     private var currentObserver: AnyCancellable?
+    private var playingObserver: AnyCancellable?
+    private var consecutiveSkips = 0
 
     init(app: AppModel) {
         self.app = app
@@ -64,6 +66,15 @@ final class MusicModel: ObservableObject {
             } else {
                 self.app.player.trackCommands = nil
             }
+        }
+        // Titel spielt nicht (auch nach automatischer Wiederherstellung): zum nächsten springen, höchstens 3× in Folge.
+        app.onUnplayable = { [weak self] item in
+            guard let self, item.videoId == self.queue.current?.videoId, self.consecutiveSkips < 3 else { return }
+            self.consecutiveSkips += 1
+            self.next()
+        }
+        playingObserver = app.player.$state.removeDuplicates().sink { [weak self] state in
+            if state == .playing { self?.consecutiveSkips = 0 }
         }
         endObserver = app.player.$state.removeDuplicates().sink { [weak self] state in
             if state == .ended { self?.trackEnded() }
