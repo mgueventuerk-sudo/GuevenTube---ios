@@ -13,6 +13,7 @@ struct SearchView: View {
     @State private var error: String?
     /// Zählt jede neue Suche hoch: eine späte Antwort einer älteren Suche wird verworfen.
     @State private var generation = 0
+    @StateObject private var downloads = DownloadsModel()
 
     var body: some View {
         NavigationStack {
@@ -30,6 +31,7 @@ struct SearchView: View {
                 if loading && results.isEmpty { ProgressView() }
                 else if searched && results.isEmpty && error == nil { Text("Keine Ergebnisse.").foregroundStyle(GT.secondaryText) }
             }
+            .downloadNotice(downloads)
             .navigationTitle("Suche")
             .searchable(text: $query, prompt: "Videos suchen")
             .onSubmit(of: .search) { Task { await run(query) } }
@@ -68,6 +70,11 @@ struct SearchView: View {
                     Spacer()
                 }
             }.buttonStyle(.plain).listRowBackground(GT.background)
+                .contextMenu {
+                    if !p.isMix, p.browseId != nil {
+                        DownloadQualityMenu(title: "Alle herunterladen") { downloads.enqueue(playlist: p, quality: $0, using: app.env.innerTube) }
+                    }
+                }
         case .row(let title, let items, _):
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.headline).padding(.horizontal, GT.Metric.page).padding(.top, 8)

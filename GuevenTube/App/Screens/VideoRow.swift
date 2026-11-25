@@ -3,7 +3,7 @@ import GuevenCore
 
 /// Eine Video-Zeile. `.card` (Start, Suche, Kanal): großes Vorschaubild über dem Text wie in der Android-App.
 /// `.compact` (Mediathek, Playlists, Verlauf): kleines Bild links. Antippen spielt ab; „⋯“ (und langes Drücken) öffnen
-/// überall dieselben Aktionen in derselben Reihenfolge: Fernseher, Später ansehen, Kanal.
+/// überall dieselben Aktionen in derselben Reihenfolge: Fernseher, Später ansehen, Herunterladen, Kanal.
 struct VideoRow: View {
     enum Style { case card, compact }
 
@@ -14,6 +14,7 @@ struct VideoRow: View {
     /// Standard: sofort abspielen. Der Kanal ersetzt das (Sheet erst schließen).
     var onPlay: (() -> Void)?
     @State private var branding: Branding = .original
+    @StateObject private var downloads = DownloadsModel()
 
     var body: some View {
         Group {
@@ -23,6 +24,7 @@ struct VideoRow: View {
             }
         }
         .contextMenu { actions }
+        .downloadNotice(downloads)
         .task(id: item.videoId) {
             // Nur mit eingeschaltetem DeArrow (Video-IDs gehen dann an den DeArrow-Dienst); Fehler → Original.
             guard await AppEnvironment.shared.settings.current().deArrowEnabled, !item.isShort else { branding = .original; return }
@@ -81,6 +83,7 @@ struct VideoRow: View {
             Button("Beim Fernseher einreihen", systemImage: "text.badge.plus") { link.addToQueue(item) }
         }
         Button("Später ansehen", systemImage: "clock") { Task { await AppEnvironment.shared.library.addToWatchLater(item) } }
+        DownloadQualityMenu { downloads.enqueue(item, quality: $0) }
         if let id = item.channelId, let name = item.channelName {
             Button("Kanal „\(name)“ öffnen", systemImage: "person.crop.circle") { app.channelRoute = ChannelRef(channelId: id, name: name) }
         }

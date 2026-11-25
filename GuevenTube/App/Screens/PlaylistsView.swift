@@ -9,6 +9,7 @@ struct PlaylistsView: View {
     @State private var renaming: LocalPlaylistWithCount?
     @State private var renameText = ""
     @State private var message: String?
+    @StateObject private var downloads = DownloadsModel()
     private let library = AppEnvironment.shared.library
 
     var body: some View {
@@ -23,8 +24,22 @@ struct PlaylistsView: View {
                     Button("Löschen", role: .destructive) { Task { await library.deletePlaylist(p.id); await reload() } }
                     Button("Umbenennen") { renameText = p.name; renaming = p }.tint(.blue)
                 }
+                .contextMenu {
+                    if p.itemCount > 0 {
+                        DownloadQualityMenu(title: "Alle herunterladen") { q in
+                            Task {
+                                let items = await library.items(in: p.id).map {
+                                    VideoItem(videoId: $0.videoId, title: $0.title, channelName: $0.channelName, channelId: nil, thumbnailUrl: $0.thumbnailUrl,
+                                              durationSeconds: $0.durationSeconds, viewCountText: nil, publishedText: nil, isLive: false)
+                                }
+                                downloads.enqueue(items, quality: q)
+                            }
+                        }
+                    }
+                }
             }
         }
+        .downloadNotice(downloads)
         .navigationTitle("Playlists")
         .toolbar { Button { newName = ""; showNew = true } label: { Image(systemName: "plus") } }
         .alert("Neue Playlist", isPresented: $showNew) {

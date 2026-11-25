@@ -91,8 +91,17 @@ struct MusicView: View {
                 .swipeActions(edge: .trailing) { likeButton(s); downloadButton(s) }
                 .contextMenu { likeButton(s); downloadButton(s) }
         } else {
-            if case .collection(let c) = item { NavigationLink(value: c) { content } }
+            if case .collection(let c) = item {
+                NavigationLink(value: c) { content }.contextMenu { collectionDownload(c, downloads: downloads, music: music) }
+            }
         }
+    }
+}
+
+/// Langes Drücken auf Album/Playlist/Interpret: alle Titel herunterladen (nur Ton).
+@MainActor private func collectionDownload(_ c: MusicCollection, downloads: DownloadsModel, music: MusicModel) -> some View {
+    Button { downloads.enqueue(collection: c, using: music) } label: {
+        Label(c.kind == .artist ? "Beliebte Titel herunterladen" : "Herunterladen", systemImage: "arrow.down.circle")
     }
 }
 
@@ -375,6 +384,7 @@ struct MusicDetailView: View {
                                 }.tint(GT.accent)
                                 Button { downloads.enqueue(songs: [t]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }.tint(.blue)
                             }
+                            .contextMenu { Button { downloads.enqueue(songs: [t]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") } }
                         }
                     }
                 }
@@ -382,8 +392,12 @@ struct MusicDetailView: View {
                     Section(section.title) {
                         ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
                             switch item {
-                            case .collection(let c): NavigationLink(value: c) { Text(c.title).lineLimit(1) }
-                            case .song(let s): Button(s.title) { music.play([s]) }.buttonStyle(.plain)
+                            case .collection(let c):
+                                NavigationLink(value: c) { Text(c.title).lineLimit(1) }
+                                    .contextMenu { collectionDownload(c, downloads: downloads, music: music) }
+                            case .song(let s):
+                                Button(s.title) { music.play([s]) }.buttonStyle(.plain)
+                                    .contextMenu { Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") } }
                             }
                         }
                     }
@@ -433,6 +447,7 @@ struct FavoriteSongsView: View {
                         }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
                     .swipeActions { Button("Entfernen", role: .destructive) { music.toggleFavorite(s) } }
+                    .contextMenu { Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") } }
                 }
             }
         }

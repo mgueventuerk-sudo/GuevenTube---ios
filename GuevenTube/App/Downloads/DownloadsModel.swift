@@ -38,6 +38,28 @@ final class DownloadsModel: ObservableObject {
         enqueue(songs.map { DownloadRequestItem(videoId: $0.videoId, title: $0.title, channelName: $0.artists, thumbnailUrl: $0.thumbnailUrl) }, quality: .audioOnly)
     }
 
+    /// Ganzes Album/Playlist aus dem Kontextmenü: erst die Titel laden, dann einreihen (immer nur Ton).
+    func enqueue(collection c: MusicCollection, using music: MusicModel) {
+        Task {
+            do {
+                let d = try await music.detail(c.browseId)
+                if d.tracks.isEmpty { notice = "Keine Titel gefunden." } else { enqueue(songs: d.tracks) }
+            } catch { notice = GTError.text(error) }
+        }
+    }
+
+    /// Video-Playlist aus der Suche: Einträge laden, dann einreihen.
+    func enqueue(playlist p: PlaylistItem, quality: DownloadQuality, using innerTube: InnerTubeService) {
+        Task {
+            guard let browseId = p.browseId else { notice = "Diese Playlist lässt sich nicht herunterladen."; return }
+            do {
+                let page = InnerTubeParser.parseFeed(try await innerTube.browse(browseId: browseId), defaultShelfTitle: p.title)
+                let items = page.shelves.flatMap(\.items)
+                if items.isEmpty { notice = "Die Playlist ist leer oder nicht abrufbar." } else { enqueue(items, quality: quality) }
+            } catch { notice = GTError.text(error) }
+        }
+    }
+
     private func enqueue(_ items: [DownloadRequestItem], quality: DownloadQuality) {
         Task {
             let kind: DownloadKind = quality == .audioOnly ? .audio : .video
@@ -60,6 +82,19 @@ extension View {
         alert("Downloads", isPresented: Binding(get: { downloads.notice != nil }, set: { if !$0 { downloads.notice = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(downloads.notice ?? "") }
+    }
+}
+
+/// Eintrag „Herunterladen“ mit Qualitätswahl für Kontextmenüs (langes Drücken).
+struct DownloadQualityMenu: View {
+    var title = "Herunterladen"
+    let action: (DownloadQuality) -> Void
+    var body: some View {
+        Menu {
+            ForEach([DownloadQuality.audioOnly, .sd, .hd, .fullHd], id: \.self) { q in
+                Button(q.label) { action(q) }
+            }
+        } label: { Label(title, systemImage: "arrow.down.circle") }
     }
 }
 
