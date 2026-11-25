@@ -5,6 +5,7 @@ struct SettingsView: View {
     @StateObject private var model = SettingsModel()
     @EnvironmentObject private var kids: KidsModel
     @State private var kidsUnlocked = false
+    @AppStorage("playbackPath") private var playbackPath = "auto"
     @AppStorage(DeviceLock.defaultsKey) private var lockEnabled = false
     @State private var pinInput = ""
     @State private var newPin = ""
@@ -13,6 +14,9 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Wiedergabe") {
+                Picker("Wiedergabeweg", selection: $playbackPath) {
+                    Text("Automatisch (bei Ausfall eingebettet)").tag("auto"); Text("Immer eingebettet").tag("embedded")
+                }
                 Picker("Höchste Auflösung", selection: binding(\.maxResolution)) {
                     Text("Automatisch").tag(ResolutionTier?.none)
                     ForEach(ResolutionTier.allCases.filter { $0.height <= 1080 }, id: \.self) { Text($0.label).tag(ResolutionTier?.some($0)) }

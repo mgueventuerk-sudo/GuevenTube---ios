@@ -200,6 +200,10 @@ struct PlayerScreen: View {
     @State private var showComments = false
     @State private var showChat = false
     @State private var showAlternatives = false
+    /// "auto": eigener Player, bei Ausfall eingebettet; "embedded": immer eingebettet.
+    @AppStorage("playbackPath") private var playbackPath = "auto"
+    @State private var manualEmbedded = false
+    private var useEmbedded: Bool { manualEmbedded || playbackPath == "embedded" || errorText != nil }
 
     var body: some View {
         GeometryReader { geo in
@@ -208,8 +212,8 @@ struct PlayerScreen: View {
                 if let v = app.current {
                     PlayerContent(
                         isLandscape: landscape, video: v, hasCaptions: !app.captions.isEmpty,
-                        qualityText: player.plan.map { $0.qualityLabel + ($0.throttled ? " · gedrosselt" : "") + (player.startTiming.map { " · " + $0 } ?? "") },
-                        errorText: errorText, isLoading: { if case .loading = player.state { return true } else { return false } }(),
+                        qualityText: useEmbedded ? "Eingebetteter YouTube-Player" + (errorText != nil ? " (eigener Player ausgefallen)" : "") : player.plan.map { $0.qualityLabel + ($0.throttled ? " · gedrosselt" : "") + (player.startTiming.map { " · " + $0 } ?? "") },
+                        errorText: nil, isLoading: { if case .loading = player.state { return true } else { return false } }(),
                         skipLabel: app.skipPrompt.map { "\($0.category.displayName) überspringen" },
                         actions: PlayerActions(
                             close: { app.closePlayer() }, minimize: { app.showPlayer = false }, skip: { app.skipPrompted() },
@@ -221,7 +225,8 @@ struct PlayerScreen: View {
                         related: app.related,
                         audioOnly: app.lastAudioOnly,
                         surface: {
-                            if app.lastAudioOnly { AudioOnlySurface(url: v.thumbnailUrl, player: player) } else { SystemPlayer(player: player.player) }
+                            if useEmbedded { EmbeddedYouTubeView(videoId: v.videoId) }
+                            else if app.lastAudioOnly { AudioOnlySurface(url: v.thumbnailUrl, player: player) } else { SystemPlayer(player: player.player) }
                         },
                         playlistMenu: {
                             AddToPlaylistMenu(video: v) { ChipLabel(title: "Playlist", systemImage: "text.badge.plus") }
@@ -243,8 +248,9 @@ struct PlayerScreen: View {
             .persistentSystemOverlays(landscape ? .hidden : .automatic)
         }
         .sheet(isPresented: $showAlternatives) {
-            if let v = app.current { AlternativePlaybackSheet(video: v) { app.play(v, audioOnly: app.lastAudioOnly) } }
+            if let v = app.current { AlternativePlaybackSheet(video: v, embedded: $manualEmbedded) { app.reresolve() } }
         }
+        .onChange(of: useEmbedded) { _, on in if on { player.pause() } }
         .sheet(isPresented: $showTranscript) { TranscriptView().environmentObject(app) }
         .sheet(isPresented: $showComments) { if let v = app.current { CommentsView(videoId: v.videoId) } }
         .sheet(isPresented: $showChat) { if let v = app.current { LiveChatView(videoId: v.videoId) } }

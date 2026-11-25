@@ -82,37 +82,39 @@ struct EmbeddedYouTubeView: UIViewRepresentable {
     final class Coordinator { var loaded: String? }
 }
 
-/// „Anderer Weg“: wenn die eigene Wiedergabe hakt oder ausfällt.
+/// „Anderer Weg“: Wiedergabeweg für dieses Video wählen. Der eingebettete Weg läuft im Player selbst weiter.
 struct AlternativePlaybackSheet: View {
     let video: VideoItem
-    let retry: () -> Void
+    @Binding var embedded: Bool
+    let reresolve: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @State private var embedded = false
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Weitere Wege für dieses Video") {
-                    Button { dismiss(); retry() } label: { Label("Erneut versuchen (nächste Route)", systemImage: "arrow.clockwise") }
-                    Button { embedded = true } label: { Label("Eingebetteter YouTube-Player", systemImage: "play.rectangle") }
+                Section("Wiedergabeweg") {
+                    Button { embedded = false; dismiss() } label: { check("Eigener Player (Warteschlange, Nur-Ton, Hintergrund, PiP)", !embedded) }
+                    Button { embedded = true; dismiss() } label: { check("Eingebetteter YouTube-Player (ohne Hintergrund/Sperrbildschirm)", embedded) }
+                }
+                Section("Eigenen Player reparieren") {
+                    Button { embedded = false; dismiss(); reresolve() } label: { Label("Neu auflösen (Zwischenspeicher verwerfen)", systemImage: "arrow.clockwise") }
+                }
+                Section("Außerhalb der App") {
                     Button { open("https://www.youtube.com/watch?v=\(video.videoId)") } label: { Label("In YouTube / Safari öffnen", systemImage: "arrow.up.right.square") }
                     Button { open("https://music.youtube.com/watch?v=\(video.videoId)") } label: { Label("In YouTube Music öffnen", systemImage: "music.note") }
                 }
-                Section { Text("Die Wege sind voneinander unabhängig: fällt die eigene Auflösung aus, funktionieren Einbettung und YouTube selbst weiter.")
+                Section { Text("Fällt der eigene Player aus, wechselt die App bei „Automatisch“ selbst auf den eingebetteten Weg (Einstellungen → Wiedergabe).")
                     .font(.footnote).foregroundStyle(.secondary) }
             }
             .navigationTitle("Anderer Weg")
             .navigationBarTitleDisplayMode(.inline)
             .doneToolbar { dismiss() }
-            .fullScreenCover(isPresented: $embedded) {
-                ZStack(alignment: .topTrailing) {
-                    EmbeddedYouTubeView(videoId: video.videoId).ignoresSafeArea()
-                    Button { embedded = false } label: { Image(systemName: "xmark.circle.fill").font(.title).foregroundStyle(.white) }.padding()
-                }.background(Color.black)
-            }
         }
     }
 
+    private func check(_ t: String, _ on: Bool) -> some View {
+        HStack { Text(t).foregroundStyle(.primary); Spacer(); if on { Image(systemName: "checkmark").foregroundStyle(GT.accent) } }
+    }
     private func open(_ s: String) { if let u = URL(string: s) { openURL(u) } }
 }

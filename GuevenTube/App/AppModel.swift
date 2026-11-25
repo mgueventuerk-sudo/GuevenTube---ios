@@ -126,6 +126,17 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// „Neu auflösen“: Zwischenspeicher dieses Videos verwerfen und an derselben Stelle neu starten.
+    func reresolve() {
+        guard let item = current else { return }
+        let pos = player.positionMs, audioOnly = lastAudioOnly, show = showPlayer
+        Task { [weak self] in
+            guard let self else { return }
+            await env.resolver.invalidate(item.videoId, resetPlayerScript: true)
+            play(item, audioOnly: audioOnly, showPlayer: show, keepQueue: true, startAtMs: pos)
+        }
+    }
+
     /// Video ↔ „Nur Ton“ umschalten, an derselben Stelle; Warteschlange und Autoplay bleiben erhalten.
     func setAudioOnly(_ on: Bool) {
         guard let item = current, !item.isLive, on != lastAudioOnly else { return }
