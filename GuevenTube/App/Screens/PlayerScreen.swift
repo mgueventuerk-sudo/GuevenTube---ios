@@ -34,6 +34,7 @@ struct PlayerActions {
     var showComments: () -> Void = {}
     var showChat: () -> Void = {}
     var toggleAudioOnly: () -> Void = {}
+    var showAlternatives: () -> Void = {}
 }
 
 /// Reine Darstellung des Players (ohne AVPlayer): Hochformat = Bild oben, Details darunter; Querformat = Bild füllt den Schirm.
@@ -154,6 +155,7 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
                 if !video.isLive {
                     ChipButton(title: audioOnly ? "Mit Bild" : "Nur Ton", systemImage: audioOnly ? "play.rectangle" : "headphones", action: actions.toggleAudioOnly)
                 }
+                ChipButton(title: "Anderer Weg", systemImage: "arrow.triangle.branch", action: actions.showAlternatives)
                 ChipButton(title: "Später ansehen", systemImage: "clock", action: actions.watchLater)
                 playlistMenu
                 downloadMenu
@@ -197,6 +199,7 @@ struct PlayerScreen: View {
     @State private var showTranscript = false
     @State private var showComments = false
     @State private var showChat = false
+    @State private var showAlternatives = false
 
     var body: some View {
         GeometryReader { geo in
@@ -213,7 +216,8 @@ struct PlayerScreen: View {
                             openChannel: { if let id = v.channelId, let name = v.channelName { app.channelRoute = ChannelRef(channelId: id, name: name) } },
                             watchLater: { Task { await AppEnvironment.shared.library.addToWatchLater(v) } },
                             showTranscript: { showTranscript = true }, showComments: { showComments = true }, showChat: { showChat = true },
-                            toggleAudioOnly: { app.setAudioOnly(!app.lastAudioOnly) }),
+                            toggleAudioOnly: { app.setAudioOnly(!app.lastAudioOnly) },
+                            showAlternatives: { showAlternatives = true }),
                         related: app.related,
                         audioOnly: app.lastAudioOnly,
                         surface: {
@@ -237,6 +241,9 @@ struct PlayerScreen: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .statusBarHidden(landscape)
             .persistentSystemOverlays(landscape ? .hidden : .automatic)
+        }
+        .sheet(isPresented: $showAlternatives) {
+            if let v = app.current { AlternativePlaybackSheet(video: v) { app.play(v, audioOnly: app.lastAudioOnly) } }
         }
         .sheet(isPresented: $showTranscript) { TranscriptView().environmentObject(app) }
         .sheet(isPresented: $showComments) { if let v = app.current { CommentsView(videoId: v.videoId) } }

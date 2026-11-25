@@ -140,6 +140,15 @@ final class MusicModel: ObservableObject {
         } catch { guard gen == generation else { return }; continuation = nil }
     }
 
+    /// Eigenständige Musiksuche (z. B. globale Suche): verändert weder `sections` noch `searchQuery`.
+    func quickSearch(_ q: String) async throws -> [MusicItem] {
+        let text = q.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return [] }
+        let page = MusicParser.parseSections(try await musicCall("search", [("query", .string(text))]))
+        var seen = Set<String>()
+        return page.sections.flatMap(\.items).filter { seen.insert($0.key).inserted }
+    }
+
     /// Album-, Playlist- oder Interpretenseite.
     func detail(_ browseId: String) async throws -> MusicDetail {
         MusicParser.parseDetail(try await musicCall("browse", [("browseId", .string(browseId))]))

@@ -3,6 +3,10 @@ import GuevenCore
 
 struct SearchView: View {
     @EnvironmentObject var app: AppModel
+    @EnvironmentObject var music: MusicModel
+    enum Scope: String, CaseIterable, Identifiable { case all = "Alle", videos = "Videos", music = "Musik"; var id: String { rawValue } }
+    @State private var scope: Scope = .all
+    @State private var musicItems: [MusicItem] = []
     @State private var query = ""
     @State private var results: [SearchResult] = []
     @State private var continuation: String?
@@ -19,25 +23,68 @@ struct SearchView: View {
         NavigationStack {
             List {
                 if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText).listRowBackground(GT.background) }
-                if let c = correction { correctionRow(c) }
-                ForEach(results, id: \.key) { r in
-                    resultRow(r)
-                        .onAppear { if r.key == results.last?.key { Task { await more() } } }
+                if let c = correction, scope != .music { correctionRow(c) }
+                if scope != .videos, !musicItems.isEmpty {
+                    let shown = scope == .all ? Array(musicItems.prefix(6)) : musicItems
+                    let songs = shown.compactMap { item -> MusicSong? in if case .song(let s) = item { return s }; return nil }
+                    Section(scope == .all ? "Musik" : "") {
+                        ForEach(Array(shown.enumerated()), id: \.offset) { _, item in musicRow(item, songs: songs) }
+                    }
+                }
+                if scope != .music {
+                    ForEach(results, id: \.key) { r in
+                        resultRow(r)
+                            .onAppear { if r.key == results.last?.key { Task { await more() } } }
+                    }
                 }
                 if loading && !results.isEmpty { ProgressView().frame(maxWidth: .infinity).listRowBackground(GT.background) }
             }
             .gtList()
             .overlay {
-                if loading && results.isEmpty { ProgressView() }
-                else if searched && results.isEmpty && error == nil { Text("Keine Ergebnisse.").foregroundStyle(GT.secondaryText) }
+                if loading && results.isEmpty && musicItems.isEmpty { ProgressView() }
+                else if searched && visibleEmpty && error == nil { Text("Keine Ergebnisse.").foregroundStyle(GT.secondaryText) }
             }
             .downloadNotice(downloads)
             .navigationTitle("Suche")
-            .searchable(text: $query, prompt: "Videos suchen")
+            .modeToolbar(picker: false)
+            .navigationDestination(for: MusicCollection.self) { MusicDetailView(collection: $0) }
+            .searchable(text: $query, prompt: "Videos & Musik suchen")
+            .searchScopes($scope) { ForEach(Scope.allCases) { Text($0.rawValue).tag($0) } }
+            .onAppear { if query.isEmpty { scope = UserDefaults.standard.string(forKey: AppMode.key) == "music" ? .music : .all } }
             .onSubmit(of: .search) { Task { await run(query) } }
             .onChange(of: query) { _, new in
-                if new.isEmpty { generation += 1; results = []; continuation = nil; correction = nil; error = nil; searched = false; loading = false }
+                if new.isEmpty { generation += 1; results = []; musicItems = []; continuation = nil; correction = nil; error = nil; searched = false; loading = false }
             }
+        }
+    }
+
+    private var visibleEmpty: Bool {
+        switch scope { case .videos: results.isEmpty; case .music: musicItems.isEmpty; case .all: results.isEmpty && musicItems.isEmpty }
+    }
+
+    @ViewBuilder private func musicRow(_ item: MusicItem, songs: [MusicSong]) -> some View {
+        switch item {
+        case .song(let s):
+            Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { MusicSongRow(song: s) }
+                .buttonStyle(.plain).listRowBackground(GT.background)
+                .contextMenu {
+                    SongQueueActions(song: s, music: music)
+                    Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }
+                }
+        case .collection(let c):
+            NavigationLink(value: c) {
+                HStack(spacing: 12) {
+                    AsyncImage(url: URL(string: item.thumbnailUrl ?? "")) { $0.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.2) }
+                        .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 6))
+                    VStack(alignment: .leading) {
+                        Text(item.title).lineLimit(1)
+                        if let t = item.subtitle { Text(t).font(.caption).foregroundStyle(GT.secondaryText).lineLimit(1) }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .listRowBackground(GT.background)
+            .contextMenu { collectionDownload(c, downloads: downloads, music: music) }
         }
     }
 
@@ -106,8 +153,10 @@ struct SearchView: View {
         let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         generation += 1; let gen = generation
-        activeQuery = q; loading = true; error = nil; results = []; continuation = nil; correction = nil
+        activeQuery = q; loading = true; error = nil; results = []; musicItems = []; continuation = nil; correction = nil
         defer { if gen == generation { loading = false } }
+        // Musik parallel; ein Fehler dort darf die Videosuche nicht stören.
+        Task { let items = (try? await music.quickSearch(q)) ?? []; if gen == generation { musicItems = items; searched = true } }
         do {
             let page = InnerTubeParser.parseSearch(try await app.env.innerTube.search(query: q, params: params))
             guard gen == generation else { return }

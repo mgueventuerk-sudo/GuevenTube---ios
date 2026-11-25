@@ -21,11 +21,9 @@ struct RootView: View {
 
     var body: some View {
         TabView {
-            StartView().withMiniPlayer().tabItem { Label("Start", systemImage: "house") }
+            HomeView().withMiniPlayer().tabItem { Label("Start", systemImage: "house") }
             SearchView().withMiniPlayer().tabItem { Label("Suche", systemImage: "magnifyingglass") }
-            MusicView().withMiniPlayer().tabItem { Label("Musik", systemImage: "music.note") }
             LibraryView().withMiniPlayer().tabItem { Label("Mediathek", systemImage: "books.vertical") }
-            AccountView().withMiniPlayer().tabItem { Label("Konto", systemImage: "person.crop.circle") }
         }
         .tint(GT.accent)
         .environmentObject(app)

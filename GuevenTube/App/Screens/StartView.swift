@@ -22,6 +22,7 @@ struct StartView: View {
             .gtList()
             .overlay { if loading && shelves.isEmpty { ProgressView() } }
             .navigationTitle("Start")
+            .modeToolbar()
             .refreshable { await load() }
             .task {
                 guard shelves.isEmpty else { return }

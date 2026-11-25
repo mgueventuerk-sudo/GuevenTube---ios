@@ -4,7 +4,6 @@ import GuevenCore
 struct MusicView: View {
     @EnvironmentObject var music: MusicModel
     @EnvironmentObject var app: AppModel
-    @State private var query = ""
     @StateObject private var downloads = DownloadsModel()
 
     var body: some View {
@@ -32,6 +31,7 @@ struct MusicView: View {
             .downloadNotice(downloads)
             .overlay { if music.loading && music.sections.isEmpty { ProgressView() } }
             .navigationTitle("Musik")
+            .modeToolbar()
             .toolbar {
                 // Immer sichtbar (auch während der Suche), nicht nur als Listenzeile.
                 ToolbarItem(placement: .topBarTrailing) {
@@ -40,12 +40,6 @@ struct MusicView: View {
                 }
             }
             .navigationDestination(for: MusicCollection.self) { MusicDetailView(collection: $0) }
-            .searchable(text: $query, prompt: "Songs, Alben, Interpreten")
-            .onSubmit(of: .search) { Task { await music.search(query) } }
-            .onChange(of: query) { _, new in
-                // Suchfeld geleert: zurück zur Startseite (sonst bleiben alte Treffer stehen).
-                if new.isEmpty, !music.searchQuery.isEmpty { Task { await music.loadHome() } }
-            }
             .task { if music.sections.isEmpty { await music.loadHome() } }
         }
     }
@@ -99,7 +93,7 @@ struct MusicView: View {
 }
 
 /// Langes Drücken auf Album/Playlist/Interpret: alle Titel herunterladen (nur Ton).
-@MainActor private func collectionDownload(_ c: MusicCollection, downloads: DownloadsModel, music: MusicModel) -> some View {
+@MainActor func collectionDownload(_ c: MusicCollection, downloads: DownloadsModel, music: MusicModel) -> some View {
     Button { downloads.enqueue(collection: c, using: music) } label: {
         Label(c.kind == .artist ? "Beliebte Titel herunterladen" : "Herunterladen", systemImage: "arrow.down.circle")
     }
