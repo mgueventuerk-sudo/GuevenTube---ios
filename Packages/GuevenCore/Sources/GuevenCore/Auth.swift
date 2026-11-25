@@ -149,12 +149,14 @@ public actor OAuthClient {
 
     private let transport: HTTPTransport
     private let tvScriptUrl: @Sendable () async -> String?
+    /// Rückfall, wenn die Live-Suche im TV-Skript scheitert. Standard: aus `BuildSecrets`; Tests übergeben ihre eigene.
+    private let fallback: OAuthClientCredentials?
     private var credentialsTask: Task<OAuthClientCredentials, Error>?
     /// Stabile Geräte-ID für die Code-Anforderung (pro Prozess).
     private let deviceId = UUID().uuidString.lowercased()
 
-    public init(transport: HTTPTransport, tvScriptUrl: @escaping @Sendable () async -> String?) {
-        self.transport = transport; self.tvScriptUrl = tvScriptUrl
+    public init(transport: HTTPTransport, tvScriptUrl: @escaping @Sendable () async -> String?, fallback: OAuthClientCredentials? = nil) {
+        self.transport = transport; self.tvScriptUrl = tvScriptUrl; self.fallback = fallback
     }
 
     public func clientCredentials() async throws -> OAuthClientCredentials {
@@ -271,6 +273,7 @@ public actor OAuthClient {
         } catch is CancellationError {
             throw CancellationError()
         } catch { /* eingebaute Kennung */ }
+        if let fallback { return fallback }
         guard !Self.fallbackClientId.isEmpty, !Self.fallbackClientSecret.isEmpty else {
             throw OAuthError(error: "missing_client", message: "Keine OAuth-Kennung: Live-Suche scheiterte und der Build enthält keine Rückfall-Kennung")
         }

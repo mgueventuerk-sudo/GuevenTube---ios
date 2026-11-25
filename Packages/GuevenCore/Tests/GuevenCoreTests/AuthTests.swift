@@ -64,9 +64,11 @@ final class AuthCredentialsTests: XCTestCase {
 final class OAuthClientTests: XCTestCase {
     private func ok(_ json: String, code: Int = 200) -> FakeTransport.Step { .response(HTTPResponse(code: code, body: Data(json.utf8))) }
     private let client = OAuthClientCredentials(clientId: "cid", clientSecret: "sec")
+    /// Eigene Rückfall-Kennung: Tests hängen nicht von den Build-Secrets ab.
+    private static let testFallback = OAuthClientCredentials(clientId: "test-fallback.apps.googleusercontent.com", clientSecret: "test-secret")
     private func make(_ steps: [FakeTransport.Step], script: String? = nil) -> (OAuthClient, FakeTransport) {
         let t = FakeTransport(steps)
-        return (OAuthClient(transport: t, tvScriptUrl: { script }), t)
+        return (OAuthClient(transport: t, tvScriptUrl: { script }, fallback: Self.testFallback), t)
     }
     private func bodyOf(_ r: HTTPRequest) -> JSON { try! JSONParser.parse(r.body!) }
 
@@ -167,7 +169,7 @@ final class AuthTokenManagerTests: XCTestCase {
     private func make(_ acc: AccountCredentials?, _ steps: [FakeTransport.Step]) -> (AuthTokenManager, FakeStore, FakeTransport) {
         let t = FakeTransport(steps)
         let store = FakeStore(acc)
-        let oauth = OAuthClient(transport: t, tvScriptUrl: { nil })
+        let oauth = OAuthClient(transport: t, tvScriptUrl: { nil }, fallback: OAuthClientCredentials(clientId: "test-fallback.apps.googleusercontent.com", clientSecret: "test-secret"))
         return (AuthTokenManager(store: store, oauth: oauth, nowMs: { [now] in now }), store, t)
     }
     private func tokenStep(_ token: String = "NEU") -> FakeTransport.Step { .response(HTTPResponse(code: 200, body: Data(#"{"access_token":"\#(token)","expires_in":3600}"#.utf8))) }
