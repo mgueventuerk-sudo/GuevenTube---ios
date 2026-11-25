@@ -50,15 +50,18 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
     let actions: PlayerActions
     var related: [VideoItem] = []
     var audioOnly = false
+    var diagnostics: String? = nil
+    var pathLabel: String? = nil
     let surface: Surface
     let playlistMenu: Playlist
     let downloadMenu: Download
 
     init(isLandscape: Bool, video: VideoItem, hasCaptions: Bool, qualityText: String?, errorText: String?, isLoading: Bool,
-         skipLabel: String?, actions: PlayerActions, related: [VideoItem] = [], audioOnly: Bool = false,
+         skipLabel: String?, actions: PlayerActions, related: [VideoItem] = [], audioOnly: Bool = false, diagnostics: String? = nil, pathLabel: String? = nil,
          @ViewBuilder surface: () -> Surface, @ViewBuilder playlistMenu: () -> Playlist, @ViewBuilder downloadMenu: () -> Download) {
         self.isLandscape = isLandscape; self.video = video; self.hasCaptions = hasCaptions; self.qualityText = qualityText
         self.errorText = errorText; self.isLoading = isLoading; self.skipLabel = skipLabel; self.actions = actions; self.related = related; self.audioOnly = audioOnly
+        self.diagnostics = diagnostics; self.pathLabel = pathLabel
         self.surface = surface(); self.playlistMenu = playlistMenu(); self.downloadMenu = downloadMenu()
     }
 
@@ -97,6 +100,12 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
                 OrientationControl.request(isLandscape ? .portrait : .landscape)
             }
         }
+        .overlay(alignment: .bottomLeading) {
+            if let pathLabel {
+                Text(pathLabel).font(.caption2.weight(.semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 4).background(.black.opacity(0.55), in: Capsule()).padding(8)
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if let skipLabel {
                 Button(skipLabel, action: actions.skip).buttonStyle(.borderedProminent).padding(.trailing, 12).padding(.bottom, 56)
@@ -120,6 +129,11 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
                 Text(video.title).font(.headline).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
                 channelRow
                 if let qualityText { Text(qualityText).font(.caption).foregroundStyle(GT.secondaryText) }
+                if let diagnostics {
+                    DisclosureGroup("Details zum Fehler") {
+                        Text(diagnostics).font(.system(.caption2, design: .monospaced)).foregroundStyle(GT.secondaryText).textSelection(.enabled)
+                    }.font(.caption)
+                }
                 chips
                 if !related.isEmpty {
                     Text("Empfohlen").font(.headline).padding(.top, 12)
@@ -212,7 +226,7 @@ struct PlayerScreen: View {
                 if let v = app.current {
                     PlayerContent(
                         isLandscape: landscape, video: v, hasCaptions: !app.captions.isEmpty,
-                        qualityText: useEmbedded ? "Eingebetteter YouTube-Player" + (errorText != nil ? " (eigener Player ausgefallen)" : "") : player.plan.map { $0.qualityLabel + ($0.throttled ? " · gedrosselt" : "") + (player.startTiming.map { " · " + $0 } ?? "") },
+                        qualityText: errorText != nil ? Self.friendlyError : useEmbedded ? "Eingebetteter YouTube-Player: Warteschlange, Hintergrund und Nur-Ton sind hier nicht verfügbar." : player.plan.map { $0.qualityLabel + ($0.throttled ? " · gedrosselt" : "") + (player.startTiming.map { " · " + $0 } ?? "") },
                         errorText: nil, isLoading: { if case .loading = player.state { return true } else { return false } }(),
                         skipLabel: app.skipPrompt.map { "\($0.category.displayName) überspringen" },
                         actions: PlayerActions(
@@ -224,6 +238,7 @@ struct PlayerScreen: View {
                             showAlternatives: { showAlternatives = true }),
                         related: app.related,
                         audioOnly: app.lastAudioOnly,
+                        diagnostics: errorText, pathLabel: useEmbedded ? "Eingebettet" : nil,
                         surface: {
                             if useEmbedded { EmbeddedYouTubeView(videoId: v.videoId) }
                             else if app.lastAudioOnly { AudioOnlySurface(url: v.thumbnailUrl, player: player) } else { SystemPlayer(player: player.player) }
@@ -259,6 +274,8 @@ struct PlayerScreen: View {
                 .environmentObject(app)
         }
     }
+
+    static let friendlyError = "Dieses Video lässt sich über den eigenen Player gerade nicht laden. Ich habe es eingebettet geöffnet; über „Anderer Weg“ kannst du einen anderen Weg wählen."
 
     private var errorText: String? {
         if let e = app.playbackError { return e }

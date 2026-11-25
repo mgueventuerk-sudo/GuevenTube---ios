@@ -81,7 +81,10 @@ struct MusicView: View {
         }
         .contentShape(Rectangle())
         if case .song(let s) = item {
-            Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { content }.buttonStyle(.plain)
+            HStack(spacing: 0) {
+                Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { content }.buttonStyle(.plain)
+                Menu { SongQueueActions(song: s, music: music); likeButton(s); downloadButton(s) } label: { MoreIcon() }
+            }
                 .swipeActions(edge: .trailing) { likeButton(s); downloadButton(s) }
                 .contextMenu { SongQueueActions(song: s, music: music); likeButton(s); downloadButton(s) }
         } else {
@@ -169,6 +172,7 @@ private struct VideoMiniBar: View {
             .padding(.horizontal, 12).padding(.vertical, 6)
         }
         .tint(GT.accent).background(.regularMaterial)
+        .swipeToClose { app.closePlayer() }
     }
 }
 
@@ -176,6 +180,7 @@ private struct MiniPlayerBar: View {
     let song: MusicSong
     @ObservedObject var player: PlayerManager
     @EnvironmentObject var music: MusicModel
+    @EnvironmentObject var app: AppModel
     let onOpen: () -> Void
 
     init(song: MusicSong, player: PlayerManager, onOpen: @escaping () -> Void) {
@@ -202,10 +207,12 @@ private struct MiniPlayerBar: View {
                 Button { player.toggle() } label: { PlayPauseIcon(state: player.state).font(.title2).frame(width: 44, height: 44) }
                     .accessibilityLabel(player.state == .playing ? "Pause" : "Abspielen")
                 control("forward.fill", "Nächster Titel") { music.next() }
+                control("xmark", "Wiedergabe beenden") { app.closePlayer() }
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
         }
         .tint(GT.accent).background(.regularMaterial)
+        .swipeToClose { app.closePlayer() }
     }
 
     private func control(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {

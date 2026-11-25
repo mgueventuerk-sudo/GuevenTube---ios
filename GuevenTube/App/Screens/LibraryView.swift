@@ -18,26 +18,9 @@ struct LibraryView: View {
                     Picker("Bereich", selection: $mode) { Text("Video").tag("video"); Text("Musik").tag("music") }.pickerStyle(.segmented)
                 }
                 .listRowBackground(Color.clear)
-                if mode == "music" {
-                    Section {
-                        NavigationLink { FavoriteSongsView() } label: {
-                            Label("Lieblingssongs (\(music.favorites.count))", systemImage: "heart.fill").foregroundStyle(GT.accent)
-                        }
-                        NavigationLink { MusicPlaylistsView() } label: { Label("Meine Playlists", systemImage: "music.note.list") }
-                        NavigationLink { MusicHistoryView() } label: { Label("Zuletzt gehört", systemImage: "clock.arrow.circlepath") }
-                        NavigationLink { DownloadsView(kind: .audio) } label: { Label("Downloads", systemImage: "arrow.down.circle") }
-                    }
-                } else {
-                Section {
-                    NavigationLink("Meine Playlists") { PlaylistsView() }
-                    NavigationLink("Abos") { SubscriptionsView() }
-                    NavigationLink { DownloadsView(kind: .video) } label: { Label("Downloads", systemImage: "arrow.down.circle") }
-                }
-                if signedIn {
-                    Section("YouTube-Konto") {
-                        NavigationLink("Verlauf") { HistoryView() }
-                    }
-                }
+                Section { tiles }
+                    .listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
+                if mode != "music" {
                 if continueWatching.isEmpty && watchLater.isEmpty { Text("Noch nichts gespeichert.").foregroundStyle(.secondary) }
                 if !continueWatching.isEmpty {
                     Section("Weiterschauen") {
@@ -63,6 +46,25 @@ struct LibraryView: View {
             .task { await reload() }
             .refreshable { await reload() }
             .onChange(of: app.showPlayer) { _, shown in if !shown { Task { await reload() } } }
+        }
+    }
+
+    /// Große Kacheln: die häufigsten Ziele ohne Scrollen.
+    @ViewBuilder private var tiles: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            if mode == "music" {
+                NavigationLink { FavoriteSongsView() } label: { LibraryTile(title: "Lieblingssongs (\(music.favorites.count))", icon: "heart.fill") }.buttonStyle(.plain)
+                NavigationLink { MusicPlaylistsView() } label: { LibraryTile(title: "Playlists", icon: "music.note.list") }.buttonStyle(.plain)
+                NavigationLink { MusicHistoryView() } label: { LibraryTile(title: "Zuletzt gehört", icon: "clock.arrow.circlepath") }.buttonStyle(.plain)
+                NavigationLink { DownloadsView(kind: .audio) } label: { LibraryTile(title: "Downloads", icon: "arrow.down.circle") }.buttonStyle(.plain)
+            } else {
+                NavigationLink { DownloadsView(kind: .video) } label: { LibraryTile(title: "Downloads", icon: "arrow.down.circle") }.buttonStyle(.plain)
+                NavigationLink { PlaylistsView() } label: { LibraryTile(title: "Playlists", icon: "list.bullet.rectangle") }.buttonStyle(.plain)
+                NavigationLink { SubscriptionsView() } label: { LibraryTile(title: "Abos", icon: "person.2") }.buttonStyle(.plain)
+                if signedIn {
+                    NavigationLink { HistoryView() } label: { LibraryTile(title: "Verlauf", icon: "clock") }.buttonStyle(.plain)
+                }
+            }
         }
     }
 

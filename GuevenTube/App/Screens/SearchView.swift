@@ -18,10 +18,26 @@ struct SearchView: View {
     /// Zählt jede neue Suche hoch: eine späte Antwort einer älteren Suche wird verworfen.
     @State private var generation = 0
     @StateObject private var downloads = DownloadsModel()
+    @State private var recent: [String] = []
+    private let library = AppEnvironment.shared.library
 
     var body: some View {
         NavigationStack {
             List {
+                if !searched, results.isEmpty, musicItems.isEmpty, !loading, query.isEmpty, !recent.isEmpty {
+                    Section {
+                        ForEach(recent, id: \.self) { r in
+                            Button { query = r; Task { await run(r) } } label: { Label(r, systemImage: "clock.arrow.circlepath").foregroundStyle(.primary) }
+                                .listRowBackground(GT.background)
+                        }
+                    } header: {
+                        HStack {
+                            Text("Zuletzt gesucht")
+                            Spacer()
+                            Button("Löschen") { Task { await library.clearSearches(); recent = [] } }.font(.footnote)
+                        }
+                    }
+                }
                 if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText).listRowBackground(GT.background) }
                 if let c = correction, scope != .music { correctionRow(c) }
                 if scope != .videos, !musicItems.isEmpty {
@@ -47,13 +63,15 @@ struct SearchView: View {
             .downloadNotice(downloads)
             .navigationTitle("Suche")
             .modeToolbar(picker: false)
+            .task { recent = await library.recentSearches() }
             .navigationDestination(for: MusicCollection.self) { MusicDetailView(collection: $0) }
             .searchable(text: $query, prompt: "Videos & Musik suchen")
             .searchScopes($scope) { ForEach(Scope.allCases) { Text($0.rawValue).tag($0) } }
             .onAppear { if query.isEmpty { scope = UserDefaults.standard.string(forKey: AppMode.key) == "music" ? .music : .all } }
             .onSubmit(of: .search) { Task { await run(query) } }
             .onChange(of: query) { _, new in
-                if new.isEmpty { generation += 1; results = []; musicItems = []; continuation = nil; correction = nil; error = nil; searched = false; loading = false }
+                if new.isEmpty { generation += 1; results = []; musicItems = []; continuation = nil; correction = nil; error = nil; searched = false; loading = false
+                    Task { recent = await library.recentSearches() } }
             }
         }
     }
@@ -65,8 +83,14 @@ struct SearchView: View {
     @ViewBuilder private func musicRow(_ item: MusicItem, songs: [MusicSong]) -> some View {
         switch item {
         case .song(let s):
-            Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { MusicSongRow(song: s) }
-                .buttonStyle(.plain).listRowBackground(GT.background)
+            HStack(spacing: 0) {
+                Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { MusicSongRow(song: s) }.buttonStyle(.plain)
+                Menu {
+                    SongQueueActions(song: s, music: music)
+                    Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }
+                } label: { MoreIcon() }
+            }
+                .listRowBackground(GT.background)
                 .contextMenu {
                     SongQueueActions(song: s, music: music)
                     Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }
@@ -153,6 +177,7 @@ struct SearchView: View {
         let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         generation += 1; let gen = generation
+        Task { await library.addSearch(q) }
         activeQuery = q; loading = true; error = nil; results = []; musicItems = []; continuation = nil; correction = nil
         defer { if gen == generation { loading = false } }
         // Musik parallel; ein Fehler dort darf die Videosuche nicht stören.

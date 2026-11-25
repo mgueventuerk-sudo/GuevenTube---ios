@@ -51,8 +51,20 @@ private struct AccountSheet: View {
 /// Start: je nach Modus Video-Startseite oder Musik-Startseite.
 struct HomeView: View {
     @AppStorage(AppMode.key) private var mode = "video"
+    @AppStorage("modeHintSeen") private var hintSeen = false
     var body: some View {
-        if mode == "music" { MusicView() } else { StartView() }
+        Group { if mode == "music" { MusicView() } else { StartView() } }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !hintSeen {
+                    HStack(spacing: 10) {
+                        Image(systemName: "info.circle").foregroundStyle(GT.accent)
+                        Text("Oben wechselst du zwischen Video und Musik. Das gilt für Start und Mediathek.").font(.footnote)
+                        Spacer(minLength: 0)
+                        Button("OK") { hintSeen = true }.font(.footnote.weight(.semibold))
+                    }
+                    .padding(12).background(.regularMaterial)
+                }
+            }
     }
 }
 

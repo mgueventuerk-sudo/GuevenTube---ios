@@ -8,6 +8,11 @@ struct RootView: View {
     @ObservedObject private var link = LinkModel.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var pendingPair: PairRequest?
+    @ObservedObject private var notices = NoticeCenter.shared
+    @ObservedObject private var net = NetworkMonitor.shared
+    @StateObject private var router = TabRouter()
+    @StateObject private var downloadsModel = DownloadsModel()
+    private var activeDownloads: Int { downloadsModel.records.filter { $0.status == .queued || $0.status == .running }.count }
 
     /// Genau ein AppModel, auch wenn SwiftUI `RootView.init` mehrfach aufruft (sonst hängt LinkModel an einer verworfenen Instanz).
     private static let sharedApp = AppModel()
@@ -20,11 +25,27 @@ struct RootView: View {
     }
 
     var body: some View {
-        TabView {
-            HomeView().withMiniPlayer().tabItem { Label("Start", systemImage: "house") }
-            SearchView().withMiniPlayer().tabItem { Label("Suche", systemImage: "magnifyingglass") }
-            LibraryView().withMiniPlayer().tabItem { Label("Mediathek", systemImage: "books.vertical") }
+        TabView(selection: $router.tab) {
+            HomeView().withMiniPlayer().tabItem { Label("Start", systemImage: "house") }.tag(0)
+            SearchView().withMiniPlayer().tabItem { Label("Suche", systemImage: "magnifyingglass") }.tag(1)
+            LibraryView().withMiniPlayer().tabItem { Label("Mediathek", systemImage: "books.vertical") }.tag(2)
+                .badge(activeDownloads)
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if net.isOffline {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                    Text("Offline – Downloads und Mediathek sind verfügbar").font(.footnote)
+                    Spacer(minLength: 0)
+                    if router.tab != 2 { Button("Mediathek") { router.tab = 2 }.font(.footnote.weight(.semibold)) }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 6).background(.regularMaterial)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            NoticeBanner(center: notices).padding(.bottom, 96).animation(.default, value: notices.text)
+        }
+        .onChange(of: net.firstStatusOffline) { _, off in if off == true { router.tab = 2 } }
         .tint(GT.accent)
         .environmentObject(app)
         .environmentObject(music)
@@ -54,6 +75,7 @@ struct RootView: View {
             if let v = n.object as? VideoItem { NewVideosService.pendingVideo = nil; app.play(v) }
         }
         .task {
+            downloadsModel.start()
             kids.start(player: app.player); await kids.refreshPin()
             // Kaltstart per Benachrichtigung: die Meldung kam vor dem Abonnieren oben.
             if let v = NewVideosService.pendingVideo { NewVideosService.pendingVideo = nil; app.play(v) }

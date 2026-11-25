@@ -24,7 +24,9 @@ final class DownloadsModel: ObservableObject {
     func stop() { observer?.cancel() }
 
     /// Kurze Rückmeldung nach dem Einreihen (wird von `.downloadNotice` als Hinweis gezeigt).
-    @Published var notice: String?
+    @Published var notice: String? {
+        didSet { if let n = notice { NoticeCenter.shared.show(n); notice = nil } }
+    }
     static let maxBulk = 25
 
     func enqueue(_ v: VideoItem, quality: DownloadQuality) { enqueue([v], quality: quality) }
@@ -104,12 +106,8 @@ final class DownloadsModel: ObservableObject {
 }
 
 extension View {
-    /// Zeigt die Rückmeldung von `DownloadsModel.notice` als Hinweis.
-    func downloadNotice(_ downloads: DownloadsModel) -> some View {
-        alert("Downloads", isPresented: Binding(get: { downloads.notice != nil }, set: { if !$0 { downloads.notice = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: { Text(downloads.notice ?? "") }
-    }
+    /// Rückmeldungen von `DownloadsModel.notice` erscheinen als Banner (`NoticeCenter`, in `RootView`); hier nichts mehr nötig.
+    func downloadNotice(_ downloads: DownloadsModel) -> some View { self }
 }
 
 /// Eintrag „Herunterladen“ mit Qualitätswahl für Kontextmenüs (langes Drücken).
