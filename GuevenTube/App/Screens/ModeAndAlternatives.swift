@@ -89,6 +89,9 @@ struct AlternativePlaybackSheet: View {
     let reresolve: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @EnvironmentObject var app: AppModel
+    @State private var choices: [(id: String, label: String)] = []
+    @State private var pinned: String? = UserDefaults.standard.string(forKey: StreamResolver.preferredClientKey)
 
     var body: some View {
         NavigationStack {
@@ -96,6 +99,10 @@ struct AlternativePlaybackSheet: View {
                 Section("Wiedergabeweg") {
                     Button { embedded = false; dismiss() } label: { check("Eigener Player (Warteschlange, Nur-Ton, Hintergrund, PiP)", !embedded) }
                     Button { embedded = true; dismiss() } label: { check("Eingebetteter YouTube-Player (ohne Hintergrund/Sperrbildschirm)", embedded) }
+                }
+                Section("Weg des eigenen Players (voller Funktionsumfang)") {
+                    Button { pin(nil) } label: { check("Automatisch", pinned == nil) }
+                    ForEach(choices, id: \.id) { c in Button { pin(c.id) } label: { check(c.label, pinned == c.id) } }
                 }
                 Section("Eigenen Player reparieren") {
                     Button { embedded = false; dismiss(); reresolve() } label: { Label("Neu auflösen (Zwischenspeicher verwerfen)", systemImage: "arrow.clockwise") }
@@ -110,7 +117,14 @@ struct AlternativePlaybackSheet: View {
             .navigationTitle("Anderer Weg")
             .navigationBarTitleDisplayMode(.inline)
             .doneToolbar { dismiss() }
+            .task { choices = await app.env.resolver.clientChoices() }
         }
+    }
+
+    private func pin(_ id: String?) {
+        pinned = id
+        if let id { UserDefaults.standard.set(id, forKey: StreamResolver.preferredClientKey) } else { UserDefaults.standard.removeObject(forKey: StreamResolver.preferredClientKey) }
+        embedded = false; dismiss(); reresolve()
     }
 
     private func check(_ t: String, _ on: Bool) -> some View {

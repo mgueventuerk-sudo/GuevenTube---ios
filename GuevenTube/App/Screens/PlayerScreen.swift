@@ -248,7 +248,7 @@ struct PlayerScreen: View {
             .persistentSystemOverlays(landscape ? .hidden : .automatic)
         }
         .sheet(isPresented: $showAlternatives) {
-            if let v = app.current { AlternativePlaybackSheet(video: v, embedded: $manualEmbedded) { app.reresolve() } }
+            if let v = app.current { AlternativePlaybackSheet(video: v, embedded: $manualEmbedded) { app.reresolve() }.environmentObject(app) }
         }
         .onChange(of: useEmbedded) { _, on in if on { player.pause() } }
         .sheet(isPresented: $showTranscript) { TranscriptView().environmentObject(app) }

@@ -210,6 +210,13 @@ public actor StreamResolver {
         do { _ = try await resolveShared(videoId, forceRefresh: false); return true } catch { return false }
     }
 
+    public static let preferredClientKey = "preferredPlayerClient"
+
+    /// Namen der aktiven Wege (Player-Clients) zur Auswahl in der App.
+    public func clientChoices() async -> [(id: String, label: String)] {
+        await registry.profiles().map { ($0.id, $0.label) }
+    }
+
     /// Der Videoserver hat die Streams dieses Wegs für [videoId] abgelehnt (HTTP 403 vor Ablauf der URLs).
     /// Die nächste Auflösung überspringt ihn.
     public func rejectRoute(videoId: String, routeLabel: String) {
@@ -355,7 +362,11 @@ public actor StreamResolver {
         let rejected = rejectedRoutes.get(videoId) ?? []
         // Hat der Videoserver alle Wege schon einmal abgelehnt, wieder von vorn beginnen.
         let allowed = all.filter { !rejected.contains($0.label) }
-        let routes = health.order(allowed.isEmpty ? all : allowed)
+        var routes = health.order(allowed.isEmpty ? all : allowed)
+        // Vom Nutzer gewählter Weg: zuerst versuchen; die übrigen bleiben als Rückfall (stabile Reihenfolge).
+        if let pinned = UserDefaults.standard.string(forKey: Self.preferredClientKey), routes.contains(where: { $0.profile.id == pinned }) {
+            routes = routes.filter { $0.profile.id == pinned } + routes.filter { $0.profile.id != pinned }
+        }
         let lazy = LazySignatureTimestamp(scripts: scripts)
         let attempts = AttemptLog()
         let degraded = Box<ResolvedPlayback>()
