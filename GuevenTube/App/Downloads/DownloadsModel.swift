@@ -25,6 +25,7 @@ final class DownloadsModel: ObservableObject {
 
     /// Kurze Rückmeldung nach dem Einreihen (wird von `.downloadNotice` als Hinweis gezeigt).
     @Published var notice: String?
+    static let maxBulk = 25
 
     func enqueue(_ v: VideoItem, quality: DownloadQuality) { enqueue([v], quality: quality) }
 
@@ -88,11 +89,14 @@ final class DownloadsModel: ObservableObject {
             let kind: DownloadKind = quality == .audioOnly ? .audio : .video
             let existing = await store.all()
             var seen = Set(existing.filter { $0.kind == kind && $0.status != .failed }.map(\.videoId))
-            let fresh = items.filter { seen.insert($0.videoId).inserted }
+            // Obergrenze je Aktion: große Sammelaufträge sehen für YouTube nach Scraping aus (Bot-Erkennung).
+            let capped = Array(items.prefix(Self.maxBulk))
+            let fresh = capped.filter { seen.insert($0.videoId).inserted }
             if !fresh.isEmpty { await repo.enqueue(fresh, quality: quality) }
-            let skipped = items.count - fresh.count
+            let skipped = capped.count - fresh.count
+            let cut = items.count - capped.count
             notice = fresh.isEmpty ? "Schon in den Downloads." :
-                "\(fresh.count) \(fresh.count == 1 ? "Download" : "Downloads") gestartet" + (skipped > 0 ? " (\(skipped) schon vorhanden)" : "") + ". Fortschritt unter Konto → Downloads."
+                "\(fresh.count) \(fresh.count == 1 ? "Download" : "Downloads") gestartet" + (skipped > 0 ? " (\(skipped) schon vorhanden)" : "") + (cut > 0 ? " Begrenzt auf \(Self.maxBulk) je Aktion (Schutz vor Sperren); \(cut) nicht eingereiht." : "") + "  Fortschritt unter Konto → Downloads."
         }
     }
     func retry(_ r: DownloadRecord) { Task { await repo.retry(r) } }

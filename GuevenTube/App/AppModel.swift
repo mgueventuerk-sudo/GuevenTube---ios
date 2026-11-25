@@ -28,6 +28,7 @@ final class AppModel: ObservableObject {
     private var autoplayAllowed = false
     /// Wie oft für das aktuelle Video nach einer Ablehnung durch den Videoserver ein anderer Weg versucht wurde.
     private var routeRetries = 0
+    private var lastReresolve = Date.distantPast
     /// Läuft gerade nur der Ton (Musik oder „Nur Ton“ im Video-Player)?
     @Published private(set) var lastAudioOnly = false
 
@@ -128,11 +129,13 @@ final class AppModel: ObservableObject {
 
     /// „Neu auflösen“: Zwischenspeicher dieses Videos verwerfen und an derselben Stelle neu starten.
     func reresolve() {
-        guard let item = current else { return }
+        // Abkühlzeit: wiederholtes Tippen darf keine Anfragewelle (Bot-Muster) auslösen.
+        guard let item = current, Date().timeIntervalSince(lastReresolve) > 30 else { playbackError = playbackError ?? "Bitte kurz warten (30 s) vor dem nächsten Neu-Auflösen."; return }
+        lastReresolve = Date()
         let pos = player.positionMs, audioOnly = lastAudioOnly, show = showPlayer
         Task { [weak self] in
             guard let self else { return }
-            await env.resolver.invalidate(item.videoId, resetPlayerScript: true)
+            await env.resolver.invalidate(item.videoId)
             play(item, audioOnly: audioOnly, showPlayer: show, keepQueue: true, startAtMs: pos)
         }
     }
