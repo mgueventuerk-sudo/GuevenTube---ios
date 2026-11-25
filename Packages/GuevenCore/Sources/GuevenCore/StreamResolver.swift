@@ -364,9 +364,7 @@ public actor StreamResolver {
         let allowed = all.filter { !rejected.contains($0.label) }
         var routes = health.order(allowed.isEmpty ? all : allowed)
         // Vom Nutzer gewählter Weg: zuerst versuchen; die übrigen bleiben als Rückfall (stabile Reihenfolge).
-        if let pinned = UserDefaults.standard.string(forKey: Self.preferredClientKey), routes.contains(where: { $0.profile.id == pinned }) {
-            routes = routes.filter { $0.profile.id == pinned } + routes.filter { $0.profile.id != pinned }
-        }
+        routes = PlaybackRoute.prioritize(routes, pinnedProfileId: UserDefaults.standard.string(forKey: Self.preferredClientKey))
         let lazy = LazySignatureTimestamp(scripts: scripts)
         let attempts = AttemptLog()
         let degraded = Box<ResolvedPlayback>()

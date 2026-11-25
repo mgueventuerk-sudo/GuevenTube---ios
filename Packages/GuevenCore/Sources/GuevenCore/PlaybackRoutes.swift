@@ -43,6 +43,12 @@ public struct PlaybackRoute: Equatable, Sendable {
         return profile.label
     }
 
+    /// Vom Nutzer gewählter Client zuerst, die übrigen bleiben in ihrer Reihenfolge als Rückfall. Unbekannte Wahl: unverändert.
+    public static func prioritize(_ routes: [PlaybackRoute], pinnedProfileId: String?) -> [PlaybackRoute] {
+        guard let id = pinnedProfileId, routes.contains(where: { $0.profile.id == id }) else { return routes }
+        return routes.filter { $0.profile.id == id } + routes.filter { $0.profile.id != id }
+    }
+
     /// Reihenfolge: Profile mit Konto-Unterstützung zuerst angemeldet, dann jeweils anonym; Profile, die einen
     /// PO-Token verlangen, nur mit Token.
     public static func build(profiles: [PlayerClientProfile], hasAccount: Bool, hasPoToken: Bool) -> [PlaybackRoute] {
