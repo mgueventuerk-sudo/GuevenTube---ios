@@ -3,6 +3,9 @@ import GuevenCore
 
 struct LibraryView: View {
     @EnvironmentObject var app: AppModel
+    @EnvironmentObject var music: MusicModel
+    /// Gemerkt: wer nur Musik nutzt, sieht beim nächsten Öffnen sofort die Musik-Mediathek.
+    @AppStorage("libraryMode") private var mode = "video"
     @State private var continueWatching: [VideoItem] = []
     @State private var watchLater: [VideoItem] = []
     @State private var signedIn = false
@@ -12,8 +15,21 @@ struct LibraryView: View {
         NavigationStack {
             List {
                 Section {
+                    Picker("Bereich", selection: $mode) { Text("Video").tag("video"); Text("Musik").tag("music") }.pickerStyle(.segmented)
+                }
+                .listRowBackground(Color.clear)
+                if mode == "music" {
+                    Section {
+                        NavigationLink { FavoriteSongsView() } label: {
+                            Label("Lieblingssongs (\(music.favorites.count))", systemImage: "heart.fill").foregroundStyle(GT.accent)
+                        }
+                        NavigationLink { DownloadsView(kind: .audio) } label: { Label("Downloads", systemImage: "arrow.down.circle") }
+                    }
+                } else {
+                Section {
                     NavigationLink("Meine Playlists") { PlaylistsView() }
                     NavigationLink("Abos") { SubscriptionsView() }
+                    NavigationLink { DownloadsView(kind: .video) } label: { Label("Downloads", systemImage: "arrow.down.circle") }
                 }
                 if signedIn {
                     Section("YouTube-Konto") {
@@ -36,6 +52,7 @@ struct LibraryView: View {
                                 .swipeActions { Button("Entfernen", role: .destructive) { Task { await library.removeFromWatchLater(v.videoId); await reload() } } }
                         }
                     }
+                }
                 }
             }
             .gtList()

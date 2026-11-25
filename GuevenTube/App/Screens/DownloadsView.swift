@@ -3,11 +3,15 @@ import GuevenCore
 
 struct DownloadsView: View {
     @StateObject private var model = DownloadsModel()
+    /// `nil`: alle (Konto); sonst nur Video oder nur Ton (Mediathek).
+    let kind: DownloadKind?
+    init(kind: DownloadKind? = nil) { self.kind = kind }
+    private var records: [DownloadRecord] { model.records.filter { kind == nil || $0.kind == kind } }
 
     var body: some View {
         List {
-            if model.records.isEmpty { Text("Noch keine Downloads.").foregroundStyle(.secondary) }
-            ForEach(model.records) { r in
+            if records.isEmpty { Text("Noch keine Downloads.").foregroundStyle(.secondary) }
+            ForEach(records) { r in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(r.title).lineLimit(2)
                     Text(statusLine(r)).font(.caption).foregroundStyle(r.status == .failed ? .red : .secondary)

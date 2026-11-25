@@ -33,6 +33,7 @@ struct PlayerActions {
     var showTranscript: () -> Void = {}
     var showComments: () -> Void = {}
     var showChat: () -> Void = {}
+    var toggleAudioOnly: () -> Void = {}
 }
 
 /// Reine Darstellung des Players (ohne AVPlayer): Hochformat = Bild oben, Details darunter; Querformat = Bild füllt den Schirm.
@@ -47,15 +48,16 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
     let skipLabel: String?
     let actions: PlayerActions
     var related: [VideoItem] = []
+    var audioOnly = false
     let surface: Surface
     let playlistMenu: Playlist
     let downloadMenu: Download
 
     init(isLandscape: Bool, video: VideoItem, hasCaptions: Bool, qualityText: String?, errorText: String?, isLoading: Bool,
-         skipLabel: String?, actions: PlayerActions, related: [VideoItem] = [],
+         skipLabel: String?, actions: PlayerActions, related: [VideoItem] = [], audioOnly: Bool = false,
          @ViewBuilder surface: () -> Surface, @ViewBuilder playlistMenu: () -> Playlist, @ViewBuilder downloadMenu: () -> Download) {
         self.isLandscape = isLandscape; self.video = video; self.hasCaptions = hasCaptions; self.qualityText = qualityText
-        self.errorText = errorText; self.isLoading = isLoading; self.skipLabel = skipLabel; self.actions = actions; self.related = related
+        self.errorText = errorText; self.isLoading = isLoading; self.skipLabel = skipLabel; self.actions = actions; self.related = related; self.audioOnly = audioOnly
         self.surface = surface(); self.playlistMenu = playlistMenu(); self.downloadMenu = downloadMenu()
     }
 
@@ -149,6 +151,9 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if !video.isLive {
+                    ChipButton(title: audioOnly ? "Mit Bild" : "Nur Ton", systemImage: audioOnly ? "play.rectangle" : "headphones", action: actions.toggleAudioOnly)
+                }
                 ChipButton(title: "Später ansehen", systemImage: "clock", action: actions.watchLater)
                 playlistMenu
                 downloadMenu
@@ -157,6 +162,30 @@ struct PlayerContent<Surface: View, Playlist: View, Download: View>: View {
                 else { ChipButton(title: "Kommentare", systemImage: "text.bubble", action: actions.showComments) }
             }
             .padding(.vertical, 2)
+        }
+    }
+}
+
+/// „Nur Ton“: Cover statt Bild, mit eigener Steuerung (der System-Player zeigt bei reinem Ton keine).
+struct AudioOnlySurface: View {
+    let url: String
+    @ObservedObject var player: PlayerManager
+    @State private var scrubbing: Double?
+
+    var body: some View {
+        ZStack {
+            AsyncImage(url: URL(string: url)) { $0.resizable().scaledToFill() } placeholder: { Color.black }
+                .blur(radius: 24).opacity(0.5).clipped()
+            VStack(spacing: 10) {
+                Label("Nur Ton", systemImage: "headphones").font(.subheadline.weight(.semibold))
+                Button { player.toggle() } label: { PlayPauseIcon(state: player.state).font(.system(size: 36)).frame(width: 64, height: 64) }
+                    .accessibilityLabel(player.state == .playing ? "Pause" : "Abspielen")
+                Slider(value: Binding(get: { scrubbing ?? Double(player.positionMs) }, set: { scrubbing = $0 }),
+                       in: 0...Double(max(1, player.durationMs))) { editing in
+                    if !editing, let s = scrubbing { player.seek(toMs: Int64(s)); scrubbing = nil }
+                }
+                .disabled(player.durationMs <= 0).accessibilityLabel("Position").padding(.horizontal, 24)
+            }.foregroundStyle(.white)
         }
     }
 }
@@ -183,9 +212,13 @@ struct PlayerScreen: View {
                             close: { app.closePlayer() }, minimize: { app.showPlayer = false }, skip: { app.skipPrompted() },
                             openChannel: { if let id = v.channelId, let name = v.channelName { app.channelRoute = ChannelRef(channelId: id, name: name) } },
                             watchLater: { Task { await AppEnvironment.shared.library.addToWatchLater(v) } },
-                            showTranscript: { showTranscript = true }, showComments: { showComments = true }, showChat: { showChat = true }),
+                            showTranscript: { showTranscript = true }, showComments: { showComments = true }, showChat: { showChat = true },
+                            toggleAudioOnly: { app.setAudioOnly(!app.lastAudioOnly) }),
                         related: app.related,
-                        surface: { SystemPlayer(player: player.player) },
+                        audioOnly: app.lastAudioOnly,
+                        surface: {
+                            if app.lastAudioOnly { AudioOnlySurface(url: v.thumbnailUrl, player: player) } else { SystemPlayer(player: player.player) }
+                        },
                         playlistMenu: {
                             AddToPlaylistMenu(video: v) { ChipLabel(title: "Playlist", systemImage: "text.badge.plus") }
                         },

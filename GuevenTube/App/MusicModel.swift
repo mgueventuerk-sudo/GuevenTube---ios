@@ -166,6 +166,16 @@ final class MusicModel: ObservableObject {
     func toggleShuffle() { queue.toggleShuffle(using: &rng) }
     func cycleRepeat() { queue.cycleRepeat() }
 
+    /// „Als Nächstes spielen“: reiht vor den kommenden Titeln ein; ohne laufende Musik startet der Titel sofort.
+    func playNext(_ song: MusicSong) { run(queue.playNext(song, using: &rng)) }
+    func jumpToQueue(_ index: Int) { run(queue.jumpTo(index)) }
+    func removeFromQueue(at index: Int) { queue.remove(at: index) }
+    /// Ziehen in der Liste (`onMove`): [destination] ist die Einfügeposition vor dem Entfernen.
+    func moveInQueue(from source: IndexSet, to destination: Int) {
+        guard let from = source.first else { return }
+        queue.move(from: from, to: destination > from ? destination - 1 : destination)
+    }
+
     /// Lädt den Liedtext des laufenden Titels (einmal je Titel; `retry` erzwingt einen neuen Versuch nach einem Fehler).
     func loadLyrics(retry: Bool = false) async {
         guard let song = queue.current else { return }

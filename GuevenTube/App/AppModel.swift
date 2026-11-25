@@ -28,7 +28,8 @@ final class AppModel: ObservableObject {
     private var autoplayAllowed = false
     /// Wie oft für das aktuelle Video nach einer Ablehnung durch den Videoserver ein anderer Weg versucht wurde.
     private var routeRetries = 0
-    private var lastAudioOnly = false
+    /// Läuft gerade nur der Ton (Musik oder „Nur Ton“ im Video-Player)?
+    @Published private(set) var lastAudioOnly = false
 
     init() {
         player.onRouteRejected = { [weak self] label, _ in self?.retryWithNextRoute(label) ?? false }
@@ -110,8 +111,8 @@ final class AppModel: ObservableObject {
                 Task { await self.loadSponsorSegments(item.videoId) }
                 // `await` darf nicht in einem `??`-Autoclosure stehen: darum ausgeschrieben.
                 let resume: Int64
-                if audioOnly { resume = 0 }
-                else if let startAtMs { resume = startAtMs }
+                if let startAtMs { resume = startAtMs }
+                else if audioOnly { resume = 0 }
                 else { resume = await env.library.resumePositionMs(item.videoId) }
                 // Ein neueres play() darf nicht von diesem veralteten Aufruf überschrieben werden.
                 try Task.checkCancellation()
@@ -123,6 +124,14 @@ final class AppModel: ObservableObject {
                 playbackError = Self.describe(error)
             }
         }
+    }
+
+    /// Video ↔ „Nur Ton“ umschalten, an derselben Stelle; Warteschlange und Autoplay bleiben erhalten.
+    func setAudioOnly(_ on: Bool) {
+        guard let item = current, !item.isLive, on != lastAudioOnly else { return }
+        let position = player.positionMs, auto = autoplayAllowed
+        play(item, audioOnly: on, showPlayer: showPlayer, keepQueue: true, startAtMs: position)
+        autoplayAllowed = auto
     }
 
     /// Der Videoserver hat die Streams eines Wegs abgelehnt: Weg sperren, neu auflösen (nächster Weg), höchstens zweimal.

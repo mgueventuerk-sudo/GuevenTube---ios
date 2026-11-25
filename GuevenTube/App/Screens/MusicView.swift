@@ -54,6 +54,10 @@ struct MusicView: View {
         Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }.tint(.blue)
     }
 
+    private func playNextButton(_ s: MusicSong) -> some View {
+        Button { music.playNext(s) } label: { Label("Als Nächstes spielen", systemImage: "text.line.first.and.arrowtriangle.forward") }
+    }
+
     private func likeButton(_ s: MusicSong) -> some View {
         Button { music.toggleFavorite(s) } label: {
             Label(music.isFavorite(s) ? "Gefällt mir nicht mehr" : "Gefällt mir", systemImage: music.isFavorite(s) ? "heart.slash" : "heart")
@@ -89,7 +93,7 @@ struct MusicView: View {
         if case .song(let s) = item {
             Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { content }.buttonStyle(.plain)
                 .swipeActions(edge: .trailing) { likeButton(s); downloadButton(s) }
-                .contextMenu { likeButton(s); downloadButton(s) }
+                .contextMenu { playNextButton(s); likeButton(s); downloadButton(s) }
         } else {
             if case .collection(let c) = item {
                 NavigationLink(value: c) { content }.contextMenu { collectionDownload(c, downloads: downloads, music: music) }
@@ -225,6 +229,7 @@ struct NowPlayingView: View {
     @EnvironmentObject var music: MusicModel
     @Environment(\.dismiss) private var dismiss
     @State private var scrubbing: Double?
+    @State private var showQueue = false
     @StateObject private var downloads = DownloadsModel()
 
     init(player: PlayerManager) { self._player = ObservedObject(wrappedValue: player) }
@@ -242,6 +247,7 @@ struct NowPlayingView: View {
         .tint(GT.accent)
         .presentationDragIndicator(.visible)
         .downloadNotice(downloads)
+        .sheet(isPresented: $showQueue) { QueueView().environmentObject(music) }
         .task(id: music.queue.current?.videoId) { await music.loadLyrics() }
     }
 
@@ -273,6 +279,11 @@ struct NowPlayingView: View {
                 }
                 progress
                 controls
+                Button { showQueue = true } label: {
+                    Label("Warteschlange (\(music.queue.upcoming.count))", systemImage: "list.bullet")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
                 lyricsSection(width: w)
             }
         }
@@ -336,6 +347,51 @@ struct NowPlayingView: View {
     }
 }
 
+/// Warteschlange: laufender Titel, kommende Titel. Antippen springt dorthin, Wischen entfernt, „Bearbeiten“ erlaubt Umsortieren.
+struct QueueView: View {
+    @EnvironmentObject var music: MusicModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let song = music.queue.current {
+                    Section("Läuft jetzt") { row(song) }
+                }
+                Section("Als Nächstes") {
+                    if music.queue.upcoming.isEmpty {
+                        Text("Nichts in der Warteschlange.").foregroundStyle(GT.secondaryText)
+                    }
+                    ForEach(Array(music.queue.upcoming.enumerated()), id: \.element.videoId) { i, s in
+                        Button { music.jumpToQueue(i) } label: { row(s) }.buttonStyle(.plain)
+                            .swipeActions { Button("Entfernen", role: .destructive) { music.removeFromQueue(at: i) } }
+                    }
+                    .onMove { music.moveInQueue(from: $0, to: $1) }
+                }
+            }
+            .navigationTitle("Warteschlange")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { EditButton() }
+                ToolbarItem(placement: .topBarTrailing) { Button("Fertig") { dismiss() } }
+            }
+        }
+        .tint(GT.accent)
+    }
+
+    private func row(_ s: MusicSong) -> some View {
+        HStack(spacing: 12) {
+            AsyncImage(url: URL(string: s.thumbnailUrl ?? "")) { $0.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.2) }
+                .frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 6))
+            VStack(alignment: .leading) {
+                Text(s.title).lineLimit(1)
+                if let a = s.artists { Text(a).font(.caption).foregroundStyle(GT.secondaryText).lineLimit(1) }
+            }
+            Spacer(minLength: 0)
+        }.contentShape(Rectangle())
+    }
+}
+
 /// Album, Playlist oder Interpret: Kopf, Titel zum Abspielen und weitere Abschnitte (Alben, Ähnliches).
 struct MusicDetailView: View {
     @EnvironmentObject var music: MusicModel
@@ -384,7 +440,10 @@ struct MusicDetailView: View {
                                 }.tint(GT.accent)
                                 Button { downloads.enqueue(songs: [t]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }.tint(.blue)
                             }
-                            .contextMenu { Button { downloads.enqueue(songs: [t]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") } }
+                            .contextMenu {
+                                Button { music.playNext(t) } label: { Label("Als Nächstes spielen", systemImage: "text.line.first.and.arrowtriangle.forward") }
+                                Button { downloads.enqueue(songs: [t]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }
+                            }
                         }
                     }
                 }
