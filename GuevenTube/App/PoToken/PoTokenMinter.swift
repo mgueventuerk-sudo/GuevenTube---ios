@@ -9,7 +9,9 @@ import GuevenCore
 actor PoTokenMinter: PoTokenProviding {
     private let transport: HTTPTransport
     private var generator: WebViewPoTokenGenerator?
-    private var streaming: (visitorData: String, token: String)?
+    /// Streaming-Token je visitorData. Überlebt das Freigeben des Generators nach Leerlauf (sonst baut die erste Wiedergabe nach
+    /// 20 Minuten Pause BotGuard neu auf), gilt aber nur [streamingLifetime] lang.
+    private var streaming: (visitorData: String, token: String, mintedAt: Date)?
     private var failures = 0
     private var pausedUntil = Date.distantPast
     private var releaseTask: Task<Void, Never>?
@@ -21,6 +23,8 @@ actor PoTokenMinter: PoTokenProviding {
     private let idleRelease: TimeInterval = 20 * 60
     private let maxFailures = 2
     private let pause: TimeInterval = 10 * 60
+    /// Wie lange YouTube den Streaming-Token annimmt, ist nicht dokumentiert; eine Stunde ist bewusst vorsichtig.
+    private let streamingLifetime: TimeInterval = 60 * 60
 
     init(transport: HTTPTransport) { self.transport = transport }
 
@@ -40,6 +44,46 @@ actor PoTokenMinter: PoTokenProviding {
             if failures >= maxFailures { pausedUntil = Date().addingTimeInterval(pause); failures = 0 }
             await dropGenerator()
             return nil
+        }
+    }
+
+    /// Nur der Streaming-Token (`pot` an Stream-URLs). Aus dem Zwischenspeicher sofort, sonst einmal prägen.
+    func streamingTokens(visitorData: String?) async -> PoTokens? {
+        guard let visitorData, !visitorData.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        if let s = validStreaming(visitorData) { status = "Streaming-Token aus Zwischenspeicher (0 ms)"; return PoTokens(player: "", streaming: s, generated: true) }
+        if Date() < pausedUntil { status = "pausiert nach Fehlern"; return nil }
+        let started = Date()
+        do {
+            let token = try await withTimeout(timeout) { try await self.mintStreaming(visitorData: visitorData, allowRecreate: true) }
+            failures = 0
+            status = "Streaming-Token ok (\(Int(Date().timeIntervalSince(started) * 1000)) ms)"
+            scheduleRelease()
+            return PoTokens(player: "", streaming: token, generated: true)
+        } catch {
+            failures += 1
+            status = "Fehler: \((error as? PoTokenError)?.message ?? String(describing: type(of: error)))"
+            if failures >= maxFailures { pausedUntil = Date().addingTimeInterval(pause); failures = 0 }
+            await dropGenerator()
+            return nil
+        }
+    }
+
+    private func validStreaming(_ visitorData: String) -> String? {
+        guard let s = streaming, s.visitorData == visitorData, Date().timeIntervalSince(s.mintedAt) < streamingLifetime else { return nil }
+        return s.token
+    }
+
+    private func mintStreaming(visitorData: String, allowRecreate: Bool) async throws -> String {
+        if let s = validStreaming(visitorData) { return s }
+        let current = try await currentGenerator()
+        do {
+            let token = try await current.mint(visitorData)
+            streaming = (visitorData, token, Date())
+            return token
+        } catch {
+            await dropGenerator()
+            if !allowRecreate { throw error }
+            return try await mintStreaming(visitorData: visitorData, allowRecreate: false)
         }
     }
 
@@ -73,9 +117,9 @@ actor PoTokenMinter: PoTokenProviding {
         let current = try await currentGenerator()
         do {
             let streamingToken: String
-            if let s = streaming, s.visitorData == visitorData { streamingToken = s.token } else {
+            if let s = validStreaming(visitorData) { streamingToken = s } else {
                 streamingToken = try await current.mint(visitorData)
-                streaming = (visitorData, streamingToken)
+                streaming = (visitorData, streamingToken, Date())
             }
             let playerToken = try await current.mint(videoId)
             return PoTokens(player: playerToken, streaming: streamingToken, generated: true)
@@ -86,10 +130,16 @@ actor PoTokenMinter: PoTokenProviding {
         }
     }
 
+    /// Nach einem Fehler: Generator und Streaming-Token verwerfen (der Token könnte zum Fehler gehören).
     private func dropGenerator() async {
+        await releaseGenerator()
+        streaming = nil
+    }
+
+    /// Nach Leerlauf: nur den Generator (WebView) freigeben, der Streaming-Token bleibt gültig.
+    private func releaseGenerator() async {
         if let g = generator { await g.close() }
         generator = nil
-        streaming = nil
     }
 
     private func scheduleRelease() {
@@ -98,7 +148,7 @@ actor PoTokenMinter: PoTokenProviding {
         releaseTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            await self?.dropGenerator()
+            await self?.releaseGenerator()
         }
     }
 

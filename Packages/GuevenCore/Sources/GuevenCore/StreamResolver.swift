@@ -53,10 +53,21 @@ public struct PoTokens: Sendable, CustomStringConvertible {
     public var generated: Bool
     public init(player: String, streaming: String, generated: Bool) { self.player = player; self.streaming = streaming; self.generated = generated }
     public var description: String { "PoTokens(generated=\(generated))" } // nie den Inhalt ausgeben
+    /// `false` bei „nur Streaming-Token“: `/player` läuft dann ohne Token, Wege mit Token-Pflicht bleiben aus.
+    public var hasPlayerToken: Bool { !player.trimmingCharacters(in: .whitespaces).isEmpty }
 }
 
 public protocol PoTokenProviding: Sendable {
     func tokens(videoId: String, visitorData: String?, generate: Bool) async -> PoTokens?
+    /// Nur der an die visitorData gebundene Token für Stream-URLs (`pot`). Er ist pro Besucher-Kennung zwischenspeicherbar,
+    /// der Video-Token nicht: So wartet nicht jede Wiedergabe auf ein BotGuard-Prägen.
+    func streamingTokens(visitorData: String?) async -> PoTokens?
+}
+
+public extension PoTokenProviding {
+    func streamingTokens(visitorData: String?) async -> PoTokens? {
+        await tokens(videoId: "", visitorData: visitorData, generate: true).map { PoTokens(player: "", streaming: $0.streaming, generated: $0.generated) }
+    }
 }
 
 public struct NoPoTokens: PoTokenProviding {
@@ -234,10 +245,10 @@ public actor StreamResolver {
         let tokens = await poTokens.tokens(videoId: videoId, visitorData: await endpoint.currentVisitorData(), generate: false)
         let profiles = await registry.profiles()
         let hasAccount = await endpoint.hasAccount()
-        for p in profiles where p.requiresPoToken && tokens == nil {
+        for p in profiles where p.requiresPoToken && tokens?.hasPlayerToken != true {
             results.append(ClientAttempt(label: p.label, outcome: .skipped, detail: "nur mit PO-Token"))
         }
-        for route in PlaybackRoute.build(profiles: profiles, hasAccount: hasAccount, hasPoToken: tokens != nil) {
+        for route in PlaybackRoute.build(profiles: profiles, hasAccount: hasAccount, hasPoToken: tokens?.hasPlayerToken ?? false) {
             try Task.checkCancellation()
             do {
                 let r = try await resolveWith(route: route, videoId: videoId, signatureTimestamp: lazy, tokens: tokens, attempts: AttemptLog())
@@ -285,7 +296,17 @@ public actor StreamResolver {
     private func resolveFresh(_ videoId: String) async throws -> ResolvedPlayback {
         let deadline = nowMs() + totalTimeoutMs()
         let kinds = KindSet()
-        var tokens = await poTokens.tokens(videoId: videoId, visitorData: await endpoint.currentVisitorData(), generate: autoPoToken && (poTokenDemand || alwaysPoToken))
+        let visitor = await endpoint.currentVisitorData()
+        var tokens: PoTokens?
+        if autoPoToken && poTokenDemand {
+            // YouTube hat schon einmal eine Bot-Prüfung verlangt: gleich mit Video-Token.
+            tokens = await poTokens.tokens(videoId: videoId, visitorData: visitor, generate: true)
+        } else if autoPoToken && alwaysPoToken {
+            // Wie Android: Video-Token nur bei Bedarf. Der Streaming-Token ist zwischengespeichert, kostet also meist nichts.
+            tokens = await poTokens.streamingTokens(visitorData: visitor)
+        } else {
+            tokens = await poTokens.tokens(videoId: videoId, visitorData: visitor, generate: false)
+        }
         let resolved: ResolvedPlayback
         do {
             resolved = try await resolveRoutes(videoId, tokens: tokens, timeoutMs: max(deadline - nowMs(), timings.minRetryMs), kinds: kinds)
@@ -306,7 +327,8 @@ public actor StreamResolver {
             let tokenMayHelp = kinds.contains(.botCheck) || kinds.contains(.sabrOnly)
             // Nur bei Bedarf einen Token erzeugen und noch einmal versuchen.
             var generated: PoTokens?
-            if autoPoToken, tokens?.generated != true, tokenMayHelp, remaining >= timings.minRetryMs {
+            let needsPlayerToken = tokens?.generated != true || tokens?.hasPlayerToken != true
+            if autoPoToken, needsPlayerToken, tokenMayHelp, remaining >= timings.minRetryMs {
                 poTokenDemand = true
                 generated = await poTokens.tokens(videoId: videoId, visitorData: await endpoint.currentVisitorData(), generate: true)
                 if generated?.generated != true { generated = nil }
@@ -329,7 +351,7 @@ public actor StreamResolver {
 
     /// Ein Durchlauf über alle Wege (zeitversetzt parallel) mit festen [tokens].
     private func resolveRoutes(_ videoId: String, tokens: PoTokens?, timeoutMs: Int64, kinds: KindSet) async throws -> ResolvedPlayback {
-        let all = PlaybackRoute.build(profiles: await registry.profiles(), hasAccount: await endpoint.hasAccount(), hasPoToken: tokens != nil)
+        let all = PlaybackRoute.build(profiles: await registry.profiles(), hasAccount: await endpoint.hasAccount(), hasPoToken: tokens?.hasPlayerToken ?? false)
         let rejected = rejectedRoutes.get(videoId) ?? []
         // Hat der Videoserver alle Wege schon einmal abgelehnt, wieder von vorn beginnen.
         let allowed = all.filter { !rejected.contains($0.label) }
