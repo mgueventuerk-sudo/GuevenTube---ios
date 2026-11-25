@@ -17,6 +17,7 @@ struct ChannelView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var subscribed = false
+    @StateObject private var downloads = DownloadsModel()
     private let library = AppEnvironment.shared.library
 
     var body: some View {
@@ -31,6 +32,11 @@ struct ChannelView: View {
                 }
                 .buttonStyle(.plain).frame(minHeight: GT.Metric.touch)
                 Spacer()
+                let videos = shelves.flatMap(\.items).filter { !$0.isLive }
+                if !videos.isEmpty {
+                    DownloadQualityMenu(title: "\(Set(videos.map(\.videoId)).count) Videos laden") { downloads.enqueue(videos, quality: $0) }
+                        .font(.subheadline.weight(.semibold))
+                }
             }
             .listRowBackground(GT.background).listRowSeparator(.hidden)
             if let error { Text(error).font(.subheadline).foregroundStyle(GT.secondaryText).listRowBackground(GT.background) }
@@ -49,6 +55,7 @@ struct ChannelView: View {
         .overlay { if loading && shelves.isEmpty { ProgressView() } }
         .navigationTitle(channel.name)
         .navigationBarTitleDisplayMode(.inline)
+        .downloadNotice(downloads)
         .task { subscribed = await library.isSubscribed(channel.channelId); if shelves.isEmpty { await first() } }
     }
 

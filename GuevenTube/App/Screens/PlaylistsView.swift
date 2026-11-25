@@ -55,7 +55,7 @@ struct PlaylistsView: View {
         .task { await reload() }
     }
 
-    private func reload() async { lists = await library.playlists().filter { !LocalLibrary.reservedNames.contains($0.name) } }
+    private func reload() async { lists = await library.playlists().filter { !LocalLibrary.reservedNames.contains($0.name) && !$0.isMusic } }
 
     private func create() async {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -143,7 +143,7 @@ struct AddToPlaylistMenu<MenuLabel: View>: View {
         } label: { label }
         .frame(minHeight: GT.Metric.touch)
         .onAppear {
-            Task { lists = await library.playlists().filter { !LocalLibrary.reservedNames.contains($0.name) } }
+            Task { lists = await library.playlists().filter { !LocalLibrary.reservedNames.contains($0.name) && !$0.isMusic } }
             Task { await loadAccountLists() }
         }
         .alert("Neue Konto-Playlist", isPresented: $newAccountList) {

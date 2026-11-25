@@ -32,6 +32,13 @@ final class MusicModel: ObservableObject {
         favoriteIds = Set(items.map(\.videoId))
     }
 
+    /// Eigene Musik-Playlists (für „Zu Playlist hinzufügen“ in Kontextmenüs).
+    @Published private(set) var playlists: [LocalPlaylistWithCount] = []
+    func reloadPlaylists() async { playlists = await library.musicPlaylists() }
+    func add(_ song: MusicSong, toPlaylist id: Int64) {
+        Task { await library.add(Self.video(song), to: id); await reloadPlaylists() }
+    }
+
     func isFavorite(_ song: MusicSong) -> Bool { favoriteIds.contains(song.videoId) }
 
     func toggleFavorite(_ song: MusicSong) {
@@ -47,7 +54,7 @@ final class MusicModel: ObservableObject {
 
     init(app: AppModel) {
         self.app = app
-        Task { await reloadFavorites() }
+        Task { await reloadFavorites(); await reloadPlaylists() }
         // Weiter/Zurück auf Sperrbildschirm und in der Kopfhörer-Steuerung nur, solange ein Musiktitel läuft.
         currentObserver = app.$current.sink { [weak self] item in
             guard let self else { return }
@@ -168,6 +175,8 @@ final class MusicModel: ObservableObject {
 
     /// „Als Nächstes spielen“: reiht vor den kommenden Titeln ein; ohne laufende Musik startet der Titel sofort.
     func playNext(_ song: MusicSong) { run(queue.playNext(song, using: &rng)) }
+    /// „Zur Warteschlange hinzufügen“: ans Ende; ohne laufende Musik startet der Titel sofort.
+    func enqueue(_ song: MusicSong) { run(queue.enqueue(song, using: &rng)) }
     func jumpToQueue(_ index: Int) { run(queue.jumpTo(index)) }
     func removeFromQueue(at index: Int) { queue.remove(at: index) }
     /// Ziehen in der Liste (`onMove`): [destination] ist die Einfügeposition vor dem Entfernen.
@@ -215,10 +224,14 @@ final class MusicModel: ObservableObject {
         }
     }
 
+    static func video(_ song: MusicSong) -> VideoItem {
+        VideoItem(videoId: song.videoId, title: song.title, channelName: song.artists,
+                  thumbnailUrl: song.thumbnailUrl ?? InnerTubeParser.fallbackThumbnail(song.videoId), durationSeconds: song.durationSeconds)
+    }
+
     private func start(_ song: MusicSong) {
-        let item = VideoItem(videoId: song.videoId, title: song.title, channelName: song.artists,
-                             thumbnailUrl: song.thumbnailUrl ?? InnerTubeParser.fallbackThumbnail(song.videoId),
-                             durationSeconds: song.durationSeconds)
+        let item = Self.video(song)
+        Task { [library] in await library.recordMusicPlay(item) } // Musik-Verlauf („Zuletzt gehört“)
         app.play(item, audioOnly: true, showPlayer: false)
     }
 

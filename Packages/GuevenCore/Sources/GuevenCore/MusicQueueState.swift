@@ -104,6 +104,15 @@ public struct MusicQueueState: Equatable, Sendable {
         return MusicQueueEffect()
     }
 
+    /// Titel ans Ende der Warteschlange hängen; ohne laufenden Titel startet er sofort. Doppelte wandern ans Ende.
+    public mutating func enqueue(_ song: MusicSong, using rng: inout AnyRandom) -> MusicQueueEffect {
+        guard current != nil else { return play([song], index: 0, radio: false, using: &rng) }
+        guard current?.videoId != song.videoId else { return MusicQueueEffect() }
+        upcoming = Array((upcoming.filter { $0.videoId != song.videoId } + [song]).prefix(Self.maxQueue))
+        unshuffled = unshuffled.map { Array(($0.filter { $0.videoId != song.videoId } + [song]).prefix(Self.maxQueue)) }
+        return MusicQueueEffect()
+    }
+
     /// Nächster Titel. Bei leerer Warteschlange und „Alle wiederholen“ beginnt die Liste von vorn.
     public mutating func next(using rng: inout AnyRandom) -> MusicQueueEffect {
         if let next = upcoming.first {

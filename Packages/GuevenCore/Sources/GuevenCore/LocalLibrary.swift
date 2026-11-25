@@ -19,6 +19,8 @@ public struct LocalPlaylist: Codable, Equatable, Sendable {
     public var id: Int64
     public var name: String
     public var createdAt: Int64
+    /// Musik-Playlist (Titel statt Videos); `nil` bei älteren Dateien = Video-Playlist.
+    public var isMusic: Bool? = nil
 }
 
 public struct LocalPlaylistWithCount: Equatable, Sendable {
@@ -26,6 +28,7 @@ public struct LocalPlaylistWithCount: Equatable, Sendable {
     public var name: String
     public var createdAt: Int64
     public var itemCount: Int
+    public var isMusic: Bool = false
 }
 
 public struct LocalPlaylistItem: Codable, Equatable, Sendable {
@@ -61,7 +64,10 @@ public actor LocalLibrary {
     /// Geliketen Musiktitel (eigene Liste, in „Meine Playlists“ ausgeblendet).
     public static let favoriteSongs = "Lieblingssongs"
     /// Namen, die Nutzer nicht selbst vergeben oder umbenennen dürfen.
-    public static let reservedNames: Set<String> = [LocalLibrary.watchLater, LocalLibrary.favoriteSongs]
+    /// Zuletzt gespielte Musiktitel, neueste zuerst (eigene Liste, ausgeblendet).
+    public static let musicHistory = "Zuletzt gehört"
+    public static let reservedNames: Set<String> = [LocalLibrary.watchLater, LocalLibrary.favoriteSongs, LocalLibrary.musicHistory]
+    static let maxMusicHistory = 200
     static let minResumePositionMs: Int64 = 30_000
     /// Obergrenze für Positionen/Dauern (ca. 31 Jahre).
     static let maxMs: Int64 = 1_000_000_000_000
@@ -204,7 +210,7 @@ public actor LocalLibrary {
 
     public func playlists() -> [LocalPlaylistWithCount] {
         data.playlists.sorted { $0.createdAt != $1.createdAt ? $0.createdAt < $1.createdAt : $0.id < $1.id }.map { p in
-            LocalPlaylistWithCount(id: p.id, name: p.name, createdAt: p.createdAt, itemCount: data.items.filter { $0.playlistId == p.id }.count)
+            LocalPlaylistWithCount(id: p.id, name: p.name, createdAt: p.createdAt, itemCount: data.items.filter { $0.playlistId == p.id }.count, isMusic: p.isMusic == true)
         }
     }
 
@@ -274,6 +280,45 @@ public actor LocalLibrary {
     public func setFavoriteSong(_ video: VideoItem, liked: Bool) {
         let id = playlistId(named: Self.favoriteSongs)
         if liked { if !contains(videoId: video.videoId, in: id) { add(video, to: id) } } else { remove(videoId: video.videoId, from: id) }
+    }
+
+    // MARK: Musik-Playlists und Musik-Verlauf
+
+    public func musicPlaylists() -> [LocalPlaylistWithCount] { playlists().filter { $0.isMusic && !Self.reservedNames.contains($0.name) } }
+
+    /// ID der Musik-Playlist [name]; legt sie an. `nil`: Name reserviert oder schon für eine Video-Playlist vergeben.
+    public func musicPlaylistId(named name: String) -> Int64? {
+        guard !Self.reservedNames.contains(name) else { return nil }
+        if let p = data.playlists.first(where: { $0.name == name }) { return p.isMusic == true ? p.id : nil }
+        let p = LocalPlaylist(id: data.nextPlaylistId, name: name, createdAt: nowMs(), isMusic: true)
+        data.nextPlaylistId += 1
+        data.playlists.append(p)
+        commit()
+        return p.id
+    }
+
+    /// Merkt einen gespielten Titel vor (nach oben, wenn schon vorhanden); behält die letzten [maxMusicHistory].
+    public func recordMusicPlay(_ video: VideoItem) {
+        let id = playlistId(named: Self.musicHistory)
+        add(video, to: id)
+        let all = items(in: id)
+        if all.count > Self.maxMusicHistory {
+            let drop = Set(all.suffix(all.count - Self.maxMusicHistory).map(\.videoId))
+            data.items.removeAll { $0.playlistId == id && drop.contains($0.videoId) }
+            commit()
+        }
+    }
+
+    /// Neueste zuerst; Lesen legt keine Liste an.
+    public func musicHistoryItems() -> [LocalPlaylistItem] {
+        guard let p = data.playlists.first(where: { $0.name == Self.musicHistory }) else { return [] }
+        return items(in: p.id)
+    }
+
+    public func clearMusicHistory() {
+        guard let p = data.playlists.first(where: { $0.name == Self.musicHistory }) else { return }
+        data.items.removeAll { $0.playlistId == p.id }
+        commit()
     }
 
     // MARK: Suchverlauf

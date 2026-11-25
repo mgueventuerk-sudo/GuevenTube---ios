@@ -60,6 +60,29 @@ final class DownloadsModel: ObservableObject {
         }
     }
 
+    /// Kanal aus der Suche: nur die erste Seite seiner Videos (nicht der ganze Kanal), ohne Livestreams.
+    func enqueue(channelId: String, quality: DownloadQuality, using innerTube: InnerTubeService) {
+        Task {
+            do {
+                let page = InnerTubeParser.parseFeed(try await innerTube.browse(browseId: channelId), defaultShelfTitle: "Videos")
+                let items = page.shelves.flatMap(\.items).filter { !$0.isLive }
+                if items.isEmpty { notice = "Keine Videos gefunden." } else { enqueue(items, quality: quality) }
+            } catch { notice = GTError.text(error) }
+        }
+    }
+
+    /// Mix: ein Mix ist endlos und nicht abrufbar. Geladen werden das Start-Video und die Empfehlungen dazu (höchstens 24).
+    func enqueue(mix p: PlaylistItem, quality: DownloadQuality, using innerTube: InnerTubeService) {
+        Task {
+            guard let first = p.firstVideoId else { notice = "Dieser Mix lässt sich nicht herunterladen."; return }
+            do {
+                let related = InnerTubeParser.parseWatchNext(try await innerTube.next(videoId: first), videoId: first).related
+                let start = VideoItem(videoId: first, title: p.title, channelName: p.ownerName, thumbnailUrl: p.thumbnailUrl ?? InnerTubeParser.fallbackThumbnail(first))
+                enqueue([start] + related.filter { !$0.isLive }.prefix(24), quality: quality)
+            } catch { notice = GTError.text(error) }
+        }
+    }
+
     private func enqueue(_ items: [DownloadRequestItem], quality: DownloadQuality) {
         Task {
             let kind: DownloadKind = quality == .audioOnly ? .audio : .video

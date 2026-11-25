@@ -164,4 +164,40 @@ final class LocalLibraryTests: XCTestCase {
         let items = await lib.continueWatching() // darf nicht abstürzen
         XCTAssertTrue(items.isEmpty || items.count == 1)
     }
+
+    // MARK: Musik-Playlists und -Verlauf
+
+    func testMusicPlaylistsAreSeparateFromVideoLists() async {
+        let l = lib()
+        let m = await l.musicPlaylistId(named: "Sport")
+        XCTAssertNotNil(m)
+        let again = await l.musicPlaylistId(named: "Sport"); XCTAssertEqual(again, m)
+        let v = await l.playlistId(named: "Filme")
+        let clash = await l.musicPlaylistId(named: "Filme"); XCTAssertNil(clash, "Name einer Video-Playlist")
+        let reserved = await l.musicPlaylistId(named: LocalLibrary.favoriteSongs); XCTAssertNil(reserved)
+        let music = await l.musicPlaylists()
+        XCTAssertEqual(music.map(\.name), ["Sport"])
+        let all = await l.playlists()
+        XCTAssertEqual(all.first { $0.id == v }?.isMusic, false)
+    }
+
+    func testMusicHistoryIsNewestFirstWithoutDuplicatesAndCapped() async {
+        let l = lib()
+        for id in ["a", "b", "c", "a"] { await l.recordMusicPlay(video(id)) }
+        let h = await l.musicHistoryItems()
+        XCTAssertEqual(h.map(\.videoId), ["a", "c", "b"])
+        for i in 0..<(LocalLibrary.maxMusicHistory + 5) { await l.recordMusicPlay(video("n\(i)")) }
+        let capped = await l.musicHistoryItems()
+        XCTAssertEqual(capped.count, LocalLibrary.maxMusicHistory)
+        XCTAssertEqual(capped.first?.videoId, "n\(LocalLibrary.maxMusicHistory + 4)")
+        await l.clearMusicHistory()
+        let empty = await l.musicHistoryItems(); XCTAssertTrue(empty.isEmpty)
+    }
+
+    func testReadingMusicHistoryCreatesNoList() async {
+        let l = lib()
+        _ = await l.musicHistoryItems()
+        let lists = await l.playlists()
+        XCTAssertTrue(lists.isEmpty)
+    }
 }

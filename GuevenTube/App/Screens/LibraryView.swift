@@ -23,6 +23,8 @@ struct LibraryView: View {
                         NavigationLink { FavoriteSongsView() } label: {
                             Label("Lieblingssongs (\(music.favorites.count))", systemImage: "heart.fill").foregroundStyle(GT.accent)
                         }
+                        NavigationLink { MusicPlaylistsView() } label: { Label("Meine Playlists", systemImage: "music.note.list") }
+                        NavigationLink { MusicHistoryView() } label: { Label("Zuletzt gehört", systemImage: "clock.arrow.circlepath") }
                         NavigationLink { DownloadsView(kind: .audio) } label: { Label("Downloads", systemImage: "arrow.down.circle") }
                     }
                 } else {

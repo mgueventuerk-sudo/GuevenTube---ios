@@ -293,4 +293,32 @@ final class MusicSessionStoreTests: XCTestCase {
         s.clear()
         XCTAssertNil(s.load())
     }
+
+    // MARK: Ans Ende einreihen
+
+    func testEnqueueAppendsAndMovesDuplicateToEnd() {
+        var q = MusicQueueState()
+        _ = q.play(songs("a", "b", "c"), index: 0, radio: false, using: &rng)
+        _ = q.enqueue(song("x"), using: &rng)
+        XCTAssertEqual(q.upcoming.map(\.videoId), ["b", "c", "x"])
+        _ = q.enqueue(song("b"), using: &rng)
+        XCTAssertEqual(q.upcoming.map(\.videoId), ["c", "x", "b"])
+    }
+
+    func testEnqueueIgnoresRunningSongAndStartsWhenIdle() {
+        var q = MusicQueueState()
+        let e = q.enqueue(song("a"), using: &rng)
+        XCTAssertEqual(e.play?.videoId, "a")
+        _ = q.enqueue(song("a"), using: &rng)
+        XCTAssertTrue(q.upcoming.isEmpty)
+    }
+
+    func testEnqueueKeepsOrderWhenShuffleIsSwitchedOff() {
+        var q = MusicQueueState()
+        _ = q.play(songs("a", "b", "c"), index: 0, radio: false, using: &rng)
+        q.toggleShuffle(using: &rng)
+        _ = q.enqueue(song("x"), using: &rng)
+        q.toggleShuffle(using: &rng)
+        XCTAssertEqual(q.upcoming.map(\.videoId), ["b", "c", "x"])
+    }
 }

@@ -54,10 +54,6 @@ struct MusicView: View {
         Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }.tint(.blue)
     }
 
-    private func playNextButton(_ s: MusicSong) -> some View {
-        Button { music.playNext(s) } label: { Label("Als Nächstes spielen", systemImage: "text.line.first.and.arrowtriangle.forward") }
-    }
-
     private func likeButton(_ s: MusicSong) -> some View {
         Button { music.toggleFavorite(s) } label: {
             Label(music.isFavorite(s) ? "Gefällt mir nicht mehr" : "Gefällt mir", systemImage: music.isFavorite(s) ? "heart.slash" : "heart")
@@ -93,7 +89,7 @@ struct MusicView: View {
         if case .song(let s) = item {
             Button { music.play(songs, index: songs.firstIndex(of: s) ?? 0) } label: { content }.buttonStyle(.plain)
                 .swipeActions(edge: .trailing) { likeButton(s); downloadButton(s) }
-                .contextMenu { playNextButton(s); likeButton(s); downloadButton(s) }
+                .contextMenu { SongQueueActions(song: s, music: music); likeButton(s); downloadButton(s) }
         } else {
             if case .collection(let c) = item {
                 NavigationLink(value: c) { content }.contextMenu { collectionDownload(c, downloads: downloads, music: music) }
@@ -272,6 +268,9 @@ struct NowPlayingView: View {
                     Button { downloads.enqueue(songs: [song]) } label: {
                         Image(systemName: "arrow.down.circle").font(.title2).frame(width: 44, height: 44)
                     }.accessibilityLabel("Titel herunterladen")
+                    Menu { SongQueueActions(song: song, music: music) } label: {
+                        Image(systemName: "ellipsis.circle").font(.title2).frame(width: 44, height: 44)
+                    }.accessibilityLabel("Weitere Aktionen")
                 }
                 if case .failed = player.state {
                     Text("Der Titel lässt sich nicht abspielen. Tippe auf „Nächster Titel“ oder versuche es später erneut.")
@@ -441,7 +440,7 @@ struct MusicDetailView: View {
                                 Button { downloads.enqueue(songs: [t]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }.tint(.blue)
                             }
                             .contextMenu {
-                                Button { music.playNext(t) } label: { Label("Als Nächstes spielen", systemImage: "text.line.first.and.arrowtriangle.forward") }
+                                SongQueueActions(song: t, music: music)
                                 Button { downloads.enqueue(songs: [t]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }
                             }
                         }
@@ -456,7 +455,10 @@ struct MusicDetailView: View {
                                     .contextMenu { collectionDownload(c, downloads: downloads, music: music) }
                             case .song(let s):
                                 Button(s.title) { music.play([s]) }.buttonStyle(.plain)
-                                    .contextMenu { Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") } }
+                                    .contextMenu {
+                                        SongQueueActions(song: s, music: music)
+                                        Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }
+                                    }
                             }
                         }
                     }
@@ -506,7 +508,10 @@ struct FavoriteSongsView: View {
                         }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
                     .swipeActions { Button("Entfernen", role: .destructive) { music.toggleFavorite(s) } }
-                    .contextMenu { Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") } }
+                    .contextMenu {
+                        SongQueueActions(song: s, music: music)
+                        Button { downloads.enqueue(songs: [s]) } label: { Label("Herunterladen", systemImage: "arrow.down.circle") }
+                    }
                 }
             }
         }

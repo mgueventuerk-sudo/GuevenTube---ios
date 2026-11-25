@@ -57,6 +57,9 @@ struct SearchView: View {
                     Spacer()
                 }
             }.buttonStyle(.plain).listRowBackground(GT.background)
+                .contextMenu {
+                    DownloadQualityMenu(title: "Videos herunterladen (erste Seite)") { downloads.enqueue(channelId: c.channelId, quality: $0, using: app.env.innerTube) }
+                }
         case .playlist(let p):
             Button { Task { await open(p) } } label: {
                 HStack(spacing: 12) {
@@ -71,7 +74,9 @@ struct SearchView: View {
                 }
             }.buttonStyle(.plain).listRowBackground(GT.background)
                 .contextMenu {
-                    if !p.isMix, p.browseId != nil {
+                    if p.isMix {
+                        DownloadQualityMenu(title: "Mix-Auswahl herunterladen") { downloads.enqueue(mix: p, quality: $0, using: app.env.innerTube) }
+                    } else if p.browseId != nil {
                         DownloadQualityMenu(title: "Alle herunterladen") { downloads.enqueue(playlist: p, quality: $0, using: app.env.innerTube) }
                     }
                 }
